@@ -1,189 +1,76 @@
-# Full Stack FastAPI Template
 
-<a href="https://github.com/fastapi/full-stack-fastapi-template/actions?query=workflow%3A%22Test+Docker+Compose%22" target="_blank"><img src="https://github.com/fastapi/full-stack-fastapi-template/workflows/Test%20Docker%20Compose/badge.svg" alt="Test Docker Compose"></a>
-<a href="https://github.com/fastapi/full-stack-fastapi-template/actions?query=workflow%3A%22Test+Backend%22" target="_blank"><img src="https://github.com/fastapi/full-stack-fastapi-template/workflows/Test%20Backend/badge.svg" alt="Test Backend"></a>
-<a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/fastapi/full-stack-fastapi-template" target="_blank"><img src="https://coverage-badge.samuelcolvin.workers.dev/fastapi/full-stack-fastapi-template.svg" alt="Coverage"></a>
+# MSOA — MLOps for Pacemaker Telemetry (Interview Project)
 
-## Technology Stack and Features
+This repository is an interview-focused demonstration of a simple end-to-end MLOps workflow built on FastAPI full-stack template. It contains a backend (FastAPI + SQLModel), a React + TypeScript frontend, data generation and ML training utilities, and Docker Compose orchestration for local development.
 
-- ⚡ [**FastAPI**](https://fastapi.tiangolo.com) for the Python backend API.
-  - 🧰 [SQLModel](https://sqlmodel.tiangolo.com) for the Python SQL database interactions (ORM).
-  - 🔍 [Pydantic](https://docs.pydantic.dev), used by FastAPI, for the data validation and settings management.
-  - 💾 [PostgreSQL](https://www.postgresql.org) as the SQL database.
-- 🚀 [React](https://react.dev) for the frontend.
-  - 💃 Using TypeScript, hooks, [Vite](https://vitejs.dev), and other parts of a modern frontend stack.
-  - 🎨 [Tailwind CSS](https://tailwindcss.com) and [shadcn/ui](https://ui.shadcn.com) for the frontend components.
-  - 🤖 An automatically generated frontend client.
-  - 🧪 [Playwright](https://playwright.dev) for End-to-End testing.
-  - 🦇 Dark mode support.
-- 🐋 [Docker Compose](https://www.docker.com) for development and production.
-- 🔒 Secure password hashing by default.
-- 🔑 JWT (JSON Web Token) authentication.
-- 📫 Email based password recovery.
-- 📬 [Mailcatcher](https://mailcatcher.me) for local email testing during development.
-- ✅ Tests with [Pytest](https://pytest.org).
-- 📞 [Traefik](https://traefik.io) as a reverse proxy / load balancer.
-- 🚢 Deployment instructions using Docker Compose, including how to set up a frontend Traefik proxy to handle automatic HTTPS certificates.
-- 🏭 CI (continuous integration) and CD (continuous deployment) based on GitHub Actions.
+**Purpose**: Showcase skills in data engineering, AI/ML, CI/CD, and automation by generating synthetic pacemaker telemetry, training a predictive model (random forest) to detect imminent device failure, and demonstrating an automated pipeline to retrain and publish model updates.
 
-### Dashboard Login
+**Disclaimer**: This project uses the FastAPI full-stack template as its starting point. Template files are intentionally present; the repository is a work-in-progress and not a final product.
 
-[![API docs](docs/img/login.png)](https://github.com/fastapi/full-stack-fastapi-template)
+## Highlights
+- Synthetic telemetry generator for pacemaker signals
+- Simple ML training pipeline (Random Forest) and model persistence
+- FastAPI backend with endpoints and migration scripts
+- React + TypeScript frontend dashboard (Vite + Bun)
+- Docker Compose for local full-stack development
 
-### Dashboard - Admin
+## Tech stack
+- Backend: Python 3.10+, FastAPI, SQLModel, Alembic
+- Frontend: React 19, TypeScript, Vite, Tailwind CSS
+- Tooling: `uv` (Python workspace), `bun` (frontend), Docker Compose, Playwright (E2E)
 
-[![API docs](docs/img/dashboard.png)](https://github.com/fastapi/full-stack-fastapi-template)
+## Quick start (local)
 
-### Dashboard - Items
+Prerequisites
 
-[![API docs](docs/img/dashboard-items.png)](https://github.com/fastapi/full-stack-fastapi-template)
+- Docker & Docker Compose
+- `uv` available for Python workspace management
+- `bun` for frontend package management
 
-### Dashboard - Dark Mode
-
-[![API docs](docs/img/dashboard-dark.png)](https://github.com/fastapi/full-stack-fastapi-template)
-
-### Interactive API Documentation
-
-[![API docs](docs/img/docs.png)](https://github.com/fastapi/full-stack-fastapi-template)
-
-## How To Use It
-
-You can **just fork or clone** this repository and use it as is.
-
-✨ It just works. ✨
-
-### How to Use a Private Repository
-
-If you want to have a private repository, GitHub won't allow you to simply fork it as it doesn't allow changing the visibility of forks.
-
-But you can do the following:
-
-- Create a new GitHub repo, for example `my-full-stack`.
-- Clone this repository manually, set the name with the name of the project you want to use, for example `my-full-stack`:
+Start required dev services (database + mailcatcher):
 
 ```bash
-git clone git@github.com:fastapi/full-stack-fastapi-template.git my-full-stack
+docker compose up -d db mailcatcher
 ```
 
-- Enter into the new directory:
+Backend setup
 
 ```bash
-cd my-full-stack
+# From repo root
+uv sync --all-packages
+cd backend
+uv run bash scripts/prestart.sh   # runs migrations + seeds as needed
+uv run bash scripts/tests-start.sh   # runs backend tests (requires DB)
 ```
 
-- Set the new origin to your new repository, copy it from the GitHub interface, for example:
+Frontend setup
 
 ```bash
-git remote set-url origin git@github.com:octocat/my-full-stack.git
+bun install
+cd frontend
+bun run dev   # or use your preferred bun/vite dev command
 ```
 
-- Add this repo as another "remote" to allow you to get updates later:
+Regenerate frontend OpenAPI client (when backend API/models change)
 
 ```bash
-git remote add upstream git@github.com:fastapi/full-stack-fastapi-template.git
+bash ./scripts/generate-client.sh
 ```
 
-- Push the code to your new repository:
+## Tests & CI
 
-```bash
-git push -u origin main
-```
+- Backend tests: `cd backend && uv run bash scripts/tests-start.sh` (requires DB + prestart)
+- Playwright E2E: bring up backend services and run `bunx playwright test` from `frontend/`.
+- Coverage requirement (for CI): backend coverage must remain >= 90%.
 
-### Update From the Original Template
+## Important repo notes
 
-After cloning the repository, and after doing changes, you might want to get the latest changes from this original template.
+- Do NOT manually edit generated files under `frontend/src/client/` or `frontend/src/components/ui/`.
+- Use `uv` for Python package commands and `bun` for JavaScript/TypeScript per repository conventions.
+- Follow scripts in `backend/scripts/` for consistent local setup.
 
-- Make sure you added the original repository as a remote, you can check it with:
-
-```bash
-git remote -v
-
-origin    git@github.com:octocat/my-full-stack.git (fetch)
-origin    git@github.com:octocat/my-full-stack.git (push)
-upstream    git@github.com:fastapi/full-stack-fastapi-template.git (fetch)
-upstream    git@github.com:fastapi/full-stack-fastapi-template.git (push)
-```
-
-- Pull the latest changes without merging:
-
-```bash
-git pull --no-commit upstream master
-```
-
-This will download the latest changes from this template without committing them, that way you can check everything is right before committing.
-
-- If there are conflicts, solve them in your editor.
-
-- Once you are done, commit the changes:
-
-```bash
-git merge --continue
-```
-
-### Configure
-
-You can then update configs in the `.env` files to customize your configurations.
-
-Before deploying it, make sure you change at least the values for:
-
-- `SECRET_KEY`
-- `FIRST_SUPERUSER_PASSWORD`
-- `POSTGRES_PASSWORD`
-
-You can (and should) pass these as environment variables from secrets.
-
-Read the [deployment.md](./docs/deployment.md) docs for more details.
-
-### Generate Secret Keys
-
-Some environment variables in the `.env` file have a default value of `changethis`.
-
-You have to change them with a secret key, to generate secret keys you can run the following command:
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
-Copy the content and use that as password / secret key. And run that again to generate another secure key.
-
-### Input Variables
-
-The input variables, with their default values (some auto generated) are:
-
-- `project_name`: (default: `"FastAPI Project"`) The name of the project, shown to API users (in .env).
-- `stack_name`: (default: `"fastapi-project"`) The name of the stack used for Docker Compose labels and project name (no spaces, no periods) (in .env).
-- `secret_key`: (default: `"changethis"`) The secret key for the project, used for security, stored in .env, you can generate one with the method above.
-- `first_superuser`: (default: `"admin@example.com"`) The email of the first superuser (in .env).
-- `first_superuser_password`: (default: `"changethis"`) The password of the first superuser (in .env).
-- `smtp_host`: (default: "") The SMTP server host to send emails, you can set it later in .env.
-- `smtp_user`: (default: "") The SMTP server user to send emails, you can set it later in .env.
-- `smtp_password`: (default: "") The SMTP server password to send emails, you can set it later in .env.
-- `emails_from_email`: (default: `"info@example.com"`) The email account to send emails from, you can set it later in .env.
-- `postgres_password`: (default: `"changethis"`) The password for the PostgreSQL database, stored in .env, you can generate one with the method above.
-- `sentry_dsn`: (default: "") The DSN for Sentry, if you are using it, you can set it later in .env.
-
-## Backend Development
-
-Backend docs: [backend/README.md](./backend/README.md).
-
-## Frontend Development
-
-Frontend docs: [frontend/README.md](./frontend/README.md).
-
-## Deployment
-
-Deployment docs: [deployment.md](./docs/deployment.md).
-
-## Development
-
-General development docs: [development.md](./docs/development.md).
-
-This includes using Docker Compose, custom local domains, `.env` configurations, etc.
-
-## Release Notes
-
-Check the file [release-notes.md](./docs/template-release-notes.md).
-
-## License
-
-The Full Stack FastAPI Template is licensed under the terms of the MIT license.
+## Where to look next
+- Backend entrypoint: [backend/app/main.py](backend/app/main.py#L1)
+- Models and CRUD: [backend/app/models.py](backend/app/models.py#L1) and [backend/app/crud.py](backend/app/crud.py#L1)
+- Data generation helper: [util/generate_data.py](util/generate_data.py#L1)
+- Client generation script: [scripts/generate-client.sh](scripts/generate-client.sh#L1)
