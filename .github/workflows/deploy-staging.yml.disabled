@@ -1,0 +1,56 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    # Do not deploy in the main repository, only in user projects
+    if: github.repository_owner != 'fastapi'
+    runs-on:
+      - self-hosted
+      - staging
+    env:
+      ENVIRONMENT: staging
+      DOMAIN: ${{ secrets.DOMAIN_STAGING }}
+      STACK_NAME: ${{ secrets.STACK_NAME_STAGING }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      FIRST_SUPERUSER: ${{ secrets.FIRST_SUPERUSER }}
+      FIRST_SUPERUSER_PASSWORD: ${{ secrets.FIRST_SUPERUSER_PASSWORD }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      EMAILS_FROM_EMAIL: ${{ secrets.EMAILS_FROM_EMAIL }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Prepare .env for CI
+        run: |
+          required=(DOMAIN STACK_NAME POSTGRES_PASSWORD SECRET_KEY FIRST_SUPERUSER FIRST_SUPERUSER_PASSWORD)
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required secret: $name"
+              exit 1
+            fi
+          done
+          cp .env-template .env
+          {
+            echo "DOMAIN=${DOMAIN}"
+            echo "STACK_NAME=${STACK_NAME}"
+            echo "ENVIRONMENT=${ENVIRONMENT}"
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+            echo "SECRET_KEY=${SECRET_KEY}"
+            echo "FIRST_SUPERUSER=${FIRST_SUPERUSER}"
+            echo "FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD}"
+            echo "SMTP_HOST=${SMTP_HOST}"
+            echo "SMTP_USER=${SMTP_USER}"
+            echo "SMTP_PASSWORD=${SMTP_PASSWORD}"
+            echo "EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL}"
+            echo "SENTRY_DSN=${SENTRY_DSN}"
+          } >> .env
+      - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING }} build
+      - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING }} up -d

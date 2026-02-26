@@ -1,0 +1,62 @@
+name: Test Backend
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Prepare .env for CI
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          FIRST_SUPERUSER: ${{ secrets.FIRST_SUPERUSER }}
+          FIRST_SUPERUSER_PASSWORD: ${{ secrets.FIRST_SUPERUSER_PASSWORD }}
+        run: |
+          required=(POSTGRES_PASSWORD SECRET_KEY FIRST_SUPERUSER FIRST_SUPERUSER_PASSWORD)
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required secret: $name"
+              exit 1
+            fi
+          done
+          cp .env-template .env
+          {
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+            echo "SECRET_KEY=${SECRET_KEY}"
+            echo "FIRST_SUPERUSER=${FIRST_SUPERUSER}"
+            echo "FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD}"
+          } >> .env
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+      - run: docker compose down -v --remove-orphans
+      - run: docker compose up -d db mailcatcher
+      - name: Migrate DB
+        run: uv run bash scripts/prestart.sh
+        working-directory: backend
+      - name: Run tests
+        run: uv run bash scripts/tests-start.sh "Coverage for ${{ github.sha }}"
+        working-directory: backend
+      - run: docker compose down -v --remove-orphans
+      - name: Store coverage files
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-html
+          path: backend/htmlcov
+          include-hidden-files: true
+      - name: Coverage report
+        run: uv run coverage report --fail-under=90
+        working-directory: backend

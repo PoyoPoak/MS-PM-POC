@@ -1,0 +1,21 @@
+{
+    "recommendations": [
+        "astral-sh.ty",
+        "biomejs.biome",
+        "bradlc.vscode-tailwindcss",
+        "charliermarsh.ruff",
+        "davidanson.vscode-markdownlint",
+        "docker.docker",
+        "github.vscode-github-actions",
+        "GitHub.copilot-chat",
+        "gruntfuggly.todo-tree",
+        "mjmlio.vscode-mjml",
+        "ms-playwright.playwright",
+        "ms-python.autopep8",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.vscode-python-envs",
+        "rangav.vscode-thunder-client",
+        "tombi-toml.tombi"
+    ]
+}

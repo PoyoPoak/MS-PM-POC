@@ -1,0 +1,47 @@
+name: Test Docker Compose
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+jobs:
+
+  test-docker-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Prepare .env for CI
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          FIRST_SUPERUSER: ${{ secrets.FIRST_SUPERUSER }}
+          FIRST_SUPERUSER_PASSWORD: ${{ secrets.FIRST_SUPERUSER_PASSWORD }}
+        run: |
+          required=(POSTGRES_PASSWORD SECRET_KEY FIRST_SUPERUSER FIRST_SUPERUSER_PASSWORD)
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required secret: $name"
+              exit 1
+            fi
+          done
+          cp .env-template .env
+          {
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+            echo "SECRET_KEY=${SECRET_KEY}"
+            echo "FIRST_SUPERUSER=${FIRST_SUPERUSER}"
+            echo "FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD}"
+          } >> .env
+      - run: docker compose build
+      - run: docker compose down -v --remove-orphans
+      - run: docker compose up -d --wait backend frontend adminer
+      - name: Test backend is up
+        run: curl http://localhost:8000/api/v1/utils/health-check
+      - name: Test frontend is up
+        run: curl http://localhost:5173
+      - run: docker compose down -v --remove-orphans

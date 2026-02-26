@@ -1,0 +1,94 @@
+name: Markdown Links
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  check-markdown-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check markdown links
+        shell: bash
+        run: |
+          python - <<'PY'
+          import re
+          import subprocess
+          from pathlib import Path
+
+          root = Path.cwd()
+          result = subprocess.run(
+              ["git", "ls-files", "*.md"],
+              check=True,
+              stdout=subprocess.PIPE,
+              text=True,
+          )
+          files = [Path(line) for line in result.stdout.splitlines() if line.strip()]
+
+          link_pattern = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
+          valid_exts = {
+              ".md",
+              ".png",
+              ".jpg",
+              ".jpeg",
+              ".gif",
+              ".svg",
+              ".webp",
+              ".bmp",
+              ".ico",
+              ".avif",
+          }
+
+          missing = []
+
+          for file_path in files:
+              try:
+                  content = file_path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  content = file_path.read_text(encoding="utf-8", errors="ignore")
+
+              for match in link_pattern.findall(content):
+                  target = match.strip()
+                  if not target:
+                      continue
+
+                  if target.startswith("<") and target.endswith(">"):
+                      target = target[1:-1].strip()
+
+                  if target.startswith("#"):
+                      continue
+
+                  if re.match(r"^(https?://|mailto:)", target):
+                      continue
+
+                  # Remove title after the URL (common markdown syntax)
+                  target = target.split()[0]
+
+                  # Remove anchor fragments
+                  target = target.split("#", 1)[0].strip()
+                  if not target:
+                      continue
+
+                  ext = Path(target).suffix.lower()
+                  if ext not in valid_exts:
+                      continue
+
+                  if target.startswith("/"):
+                      candidate = root / target.lstrip("/")
+                  else:
+                      candidate = file_path.parent / target
+
+                  if not candidate.exists():
+                      missing.append(f"{file_path}: {target}")
+
+          if missing:
+              print("Broken local links found:")
+              for item in missing:
+                  print(f"- {item}")
+              raise SystemExit(1)
+
+          print("All local markdown links resolve to existing files.")
+          PY
