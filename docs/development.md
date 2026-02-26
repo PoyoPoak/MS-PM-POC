@@ -169,7 +169,7 @@ Then you can `git add` the modified/fixed files again and now you can commit.
 you can also run `prek` manually on all the files, you can do it using `uv` with:
 
 ```bash
-❯ find . -type f -not -path '*/.*/*' -print0 | xargs -0 uv run prek run --files
+❯ uv run prek run --all-files
 check for added large files..............................................Passed
 check toml...............................................................Passed
 check yaml...............................................................Passed
