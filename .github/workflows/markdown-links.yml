@@ -26,7 +26,15 @@ jobs:
               stdout=subprocess.PIPE,
               text=True,
           )
-          files = [Path(line) for line in result.stdout.splitlines() if line.strip()]
+          def contains_hidden_folder(path: Path) -> bool:
+              return any(part.startswith(".") for part in path.parts if part not in (".", ".."))
+
+          files = [
+              Path(line)
+              for line in result.stdout.splitlines()
+              if line.strip()
+              and not contains_hidden_folder(Path(line))
+          ]
 
           link_pattern = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
           valid_exts = {
@@ -80,6 +88,9 @@ jobs:
                       candidate = root / target.lstrip("/")
                   else:
                       candidate = file_path.parent / target
+
+                  if contains_hidden_folder(candidate):
+                      continue
 
                   if not candidate.exists():
                       missing.append(f"{file_path}: {target}")
