@@ -72,5 +72,5 @@ bash ./scripts/generate-client.sh
 ## Where to look next
 - Backend entrypoint: [backend/app/main.py](backend/app/main.py#L1)
 - Models and CRUD: [backend/app/models.py](backend/app/models.py#L1) and [backend/app/crud.py](backend/app/crud.py#L1)
-- Data generation helper: [util/generate_data.py](util/generate_data.py#L1)
+- Data generation helper: [backend/util/generate_data.py](backend/util/generate_data.py#L1)
 - Client generation script: [scripts/generate-client.sh](scripts/generate-client.sh#L1)
