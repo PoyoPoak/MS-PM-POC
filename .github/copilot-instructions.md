@@ -134,6 +134,15 @@ If you modify `backend/app/api/`, `backend/app/models.py`, or any backend route/
 3. **Commit** the regenerated files in `frontend/src/client/`.
 4. Fix any resulting TypeScript errors in `frontend/src/`.
 
+## Documentation Sync Protocol
+
+When implementation changes are made, update documentation in the same work item when appropriate.
+
+- **Class/major function/component changes**: update or create the corresponding instruction file in `.github/instructions/` when behavior, inputs/outputs, contracts, or usage expectations change.
+- **Feature/workflow/API/data model changes**: update impacted docs under `docs/` (for example `docs/project.md`, `docs/pacemaker-telemetry.md`, `docs/development.md`, `docs/ml-engine.md`).
+- **Definition of done**: do not treat implementation-only changes as complete until relevant `.github/instructions` and/or `docs` updates are included.
+- **Avoid doc drift**: if no documentation update is needed, explicitly verify that existing `.github/instructions` and `docs` content remains accurate for the change.
+
 ## Key Conventions
 
 - **Python**: Target 3.10. Ruff rules: pycodestyle, pyflakes, isort, flake8-bugbear, comprehensions, pyupgrade, `T201` (no `print()`), `ARG001` (no unused args). `B904` ignored (HTTPException).

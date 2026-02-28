@@ -3,10 +3,13 @@
 ## 1) Project Summary
 
 ### Working Title
+
 **Pacemaker Telemetry Risk Monitoring Platform (Interview Showcase)**
 
 ### Purpose
+
 Build a production-style, interview-ready web application that demonstrates end-to-end software engineering across:
+
 - Data simulation and ingestion
 - AI/ML training and evaluation
 - MLOps automation
@@ -15,9 +18,11 @@ Build a production-style, interview-ready web application that demonstrates end-
 This project is intentionally designed as a showcase artifact for a summer software engineering internship interview in a medical-device R&D context.
 
 ### Audience
+
 Primary audience: **technical interview panel** (engineering manager + software/data/ML engineers).
 
 ### Document Depth
+
 **Balanced technical specification (2–4 pages)** focused on clarity, implementability, and demonstration value.
 
 ---
@@ -33,12 +38,14 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 ## 3) Objectives and Success Criteria
 
 ### Primary Objectives
+
 1. Demonstrate **end-to-end MLOps thinking** from synthetic data generation to model deployment and monitoring.
 2. Demonstrate **strong software engineering practices** (clear architecture, APIs, testing, traceability).
 3. Demonstrate **model quality workflow** (training, validation, evaluation metrics, model versioning).
 4. Demonstrate **Azure DevOps CI/CD fluency** (build/test/deploy pipelines plus scheduled ML workflow).
 
 ### Success Criteria (Interview-Facing)
+
 - A live hosted web app is accessible via public URL without local setup.
 - Telemetry appears as “incoming/live-like” synthetic data on the dashboard.
 - The app shows patient-level risk predictions and model performance metrics.
@@ -48,6 +55,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - Azure DevOps pipelines are demonstrable for CI/CD and scheduled MLOps jobs.
 
 ### Non-Goals
+
 - Clinical decision support or medical diagnosis.
 - Regulatory-grade compliance implementation.
 - Internet-scale distributed processing.
@@ -58,6 +66,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 ## 4) Scope Boundaries and Assumptions
 
 ### In Scope
+
 - Synthetic pacemaker telemetry generation (large-scale dataset + ongoing incremental records).
 - Backend API for data ingestion, model training trigger, model selection, and metrics retrieval.
 - ML training/evaluation pipeline using Random Forest baseline.
@@ -68,6 +77,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - Cloud-hosted demo deployment (single environment suitable for interview showcase).
 
 ### Out of Scope
+
 - Distributed training (Spark, Dask, etc.).
 - Advanced AutoML/hyperparameter sweeps at large scale.
 - Full RBAC/SSO enterprise auth flows.
@@ -76,6 +86,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - Infrastructure scaling beyond single-instance hosting (no Kubernetes or multi-node clusters).
 
 ### Operating Assumptions
+
 - Data is 100% synthetic.
 - App is demo-grade but engineering-rigorous.
 - Architecture prioritizes reliability and explainability over scale complexity.
@@ -85,53 +96,62 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 ## 5) Functional Requirements
 
 ### FR-1 Data Generation
+
 - System provides `generate_data.py` (or equivalent service task) to create initial telemetry dataset with ~2,000,000+ rows.
 - The data generation script I already have created and will import it as generate_data.py.
 - Data schema includes:
-    - `Patient_ID`: Integer identifier for each patient/device (0..num_patients-1).
-    - `Timestamp`: Unix timestamp of each telemetry ping.
-    - `Lead_Impedance_Ohms`: Electrical impedance of the lead, which can indicate lead integrity issues.
-    - `Capture_Threshold_V`: Voltage required to capture the heart, which can rise as the device degrades.
-    - `R_Wave_Sensing_mV`: Quality of R-wave sensing, which can drop as the device fails.
-    - `Battery_Voltage_V`: Voltage of the device battery, which can drop rapidly before failure.
-    - `Target_Fail_Next_7d`: Binary target variable indicating if the device will fail within the next 7 days (1) or not (0).
-    - `Lead_Impedance_Ohms_RollingMean_3d`: Trailing 3-day rolling mean of lead impedance.
-    - `Lead_Impedance_Ohms_RollingMean_7d`: Trailing 7-day rolling mean of lead impedance.
-    - `Capture_Threshold_V_RollingMean_3d`: Trailing 3-day rolling mean of capture threshold.
-    - `Capture_Threshold_V_RollingMean_7d`: Trailing 7-day rolling mean of capture threshold.
-    - `Lead_Impedance_Ohms_DeltaPerDay_3d`: Average per-day change in impedance over trailing 3 days.
-    - `Lead_Impedance_Ohms_DeltaPerDay_7d`: Average per-day change in impedance over trailing 7 days.
-    - `Capture_Threshold_V_DeltaPerDay_3d`: Average per-day change in threshold over trailing 3 days.
-    - `Capture_Threshold_V_DeltaPerDay_7d`: Average per-day change in threshold over trailing 7 days.
+  - `Patient_ID`: Integer identifier for each patient/device (0..num_patients-1).
+  - `Timestamp`: Unix timestamp of each telemetry ping.
+  - `Lead_Impedance_Ohms`: Electrical impedance of the lead, which can indicate lead integrity issues.
+  - `Capture_Threshold_V`: Voltage required to capture the heart, which can rise as the device degrades.
+  - `R_Wave_Sensing_mV`: Quality of R-wave sensing, which can drop as the device fails.
+  - `Battery_Voltage_V`: Voltage of the device battery, which can drop rapidly before failure.
+  - `Target_Fail_Next_7d`: Binary target variable indicating if the device will fail within the next 7 days (1) or not (0).
+  - `Lead_Impedance_Ohms_RollingMean_3d`: Trailing 3-day rolling mean of lead impedance.
+  - `Lead_Impedance_Ohms_RollingMean_7d`: Trailing 7-day rolling mean of lead impedance.
+  - `Capture_Threshold_V_RollingMean_3d`: Trailing 3-day rolling mean of capture threshold.
+  - `Capture_Threshold_V_RollingMean_7d`: Trailing 7-day rolling mean of capture threshold.
+  - `Lead_Impedance_Ohms_DeltaPerDay_3d`: Average per-day change in impedance over trailing 3 days.
+  - `Lead_Impedance_Ohms_DeltaPerDay_7d`: Average per-day change in impedance over trailing 7 days.
+  - `Capture_Threshold_V_DeltaPerDay_3d`: Average per-day change in threshold over trailing 3 days.
+  - `Capture_Threshold_V_DeltaPerDay_7d`: Average per-day change in threshold over trailing 7 days.
 - System supports continuous synthetic increments to simulate live telemetry data arrival.
 
 ### FR-2 Data Ingestion API
+
 - Backend exposes endpoint(s) to perform the following:
-    - Receive/add new telemetry records.
-    - Get information about current data, models, and metrics.
-    - Trigger model training with latest data.
-    - Retrieve patient-level risk predictions.
-    - Select active model version.
-    - Retrieve model performance metrics and version history.
-    - Trigger email alerts for high-risk predictions.
-- Incoming records are validated and appended to the dataset/store.
+  - Receive/add new telemetry records.
+  - Get information about current data, models, and metrics.
+  - Trigger model training with latest data.
+  - Retrieve patient-level risk predictions.
+  - Select active model version.
+  - Retrieve model performance metrics and version history.
+  - Trigger email alerts for high-risk predictions.
+- Incoming records are validated and appended to the dataset/store (Azure PostgreSQL database).
 - Ingestion events are auditable (timestamped run/event metadata).
 
 ### FR-3 Model Training
+
 - Uses scikit-learn for ML training.
 - Baseline model is Random Forest Classifier.
+- `MLEngine` class in `ml_engine.py` is the training orchestrator for preprocessing, model fitting, prediction, and model serialization.
 - Training pipeline includes preprocessing, feature selection/engineering, and cross-validation.
 - `Patient_ID` and raw `Timestamp` are excluded as direct predictive features unless transformed purposefully.
-- Trained model artifact is persisted with version metadata.
+- `MLEngine` includes a data preparation step that isolates feature/target columns, drops non-predictive columns, and removes rows with missing values produced by rolling-window features.
+- `MLEngine` accepts configurable Random Forest hyperparameters (for example: `n_estimators`, `max_depth`, and `random_state`) through class initialization.
+- Trained model artifact is persisted with version metadata, with model serialization/deserialization implemented via `joblib`.
+- **Data Retrieval Strategy:** The local training script (`ml_engine.py`) connects directly to the Azure PostgreSQL database. To minimize data transfer and database load, it performs an incremental pull of new records based on the latest timestamp and appends them to a local Parquet cache file before loading into a pandas DataFrame for training.
 
 ### FR-4 Model Evaluation
+
 - Utilize Out-of-Bag (OOB) error for rapid iteration during training, and K-Fold cross-validation for final model validation.
 - Evaluate overall model performance using Accuracy
 - Use Scikit-Learn’s `classification_report` to generate a comprehensive breakdown of Precision, Recall, F1-Score, and Support for each class.
 - Set `oob_score=True` within the `RandomForestClassifier` to natively compute the OOB score as a baseline metric.
-- Log all hyperparameter configurations and resulting evaluation metrics (Run History) to a structured format to enable comparison across models.
+- Log all hyperparameter configurations and resulting evaluation metrics (Run History) to a structured format to enable comparison across models; the training layer exposes applied hyperparameters and outputs for downstream run-history logging.
 
 ### FR-5 Model Registry and Selection
+
 - System tracks model versions with:
   - Version identifier (timestamp based)
   - Training time
@@ -141,16 +161,19 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - User can select an active model from dashboard/API.
 
 ### FR-6 Predictions and Risk Monitoring
+
 - Active model generates patient-level risk predictions.
 - Dashboard presents “at risk” patients and supporting telemetry context.
 - Dashboard updates every hour with new predictions and telemetry data.
 
 ### FR-7 Alerting
+
 - When risk crosses defined threshold/flag condition, system sends email notification to a predefined alerting email address.
 - For the purpose of this project, emails will be caught by mailcatcher in the local development environment.
 - Alert message includes patient identifier and relevant prediction metadata.
 
 ### FR-8 UI/UX (Dashboard)
+
 - Will be designed and initially drafted in Subframe.
 - The dashboard is built with React + TypeScript and styled with Tailwind CSS.
 - Dashboard UI elements include:
@@ -166,6 +189,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
   - Delete model control to remove underperforming models from registry.
 
 ### FR-9 CI/CD + MLOps Automation (Azure DevOps)
+
 - The platform uses a **hybrid setup** with an Azure-hosted web application and Azure DevOps orchestration, while model training/evaluation executes on a **self-hosted Azure DevOps agent running on my local PC**.
 - Azure does not directly call into the local machine; instead, Azure DevOps queues jobs and the local self-hosted agent polls and picks up training jobs.
 
@@ -213,21 +237,26 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 ## 6) Non-Functional Requirements
 
 ### Reliability
+
 - Pipeline jobs produce clear pass/fail signals and logs.
 - Failed training/evaluation must not silently overwrite active model.
 
 ### Traceability
+
 - Each model version links to training run metadata and evaluation outputs.
 
 ### Performance (Demo-Scale Targets)
+
 - Initial training should complete in practical demo time.
 - Dashboard API responses should remain responsive for interactive demo usage.
 
 ### Security (Demo Baseline)
+
 - Secrets managed via environment variables / secure pipeline variables.
 - No hardcoded credentials.
 
 ### Maintainability
+
 - Clear module boundaries (data, training, serving, UI, pipelines).
 - Readable docs and reproducible local/CI workflows.
 
@@ -236,6 +265,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 ## 7) High-Level Architecture
 
 ### Components
+
 1. **Data Generator Service/Script**
    - Creates initial + incremental synthetic telemetry.
 2. **Backend (FastAPI)**
@@ -244,9 +274,10 @@ The goal is **not** to create a clinically validated product. The goal is to dem
    - Model metadata endpoints
    - Prediction endpoints
    - Alert dispatch logic
+   - **Storage:** Azure PostgreSQL database for telemetry records, users, and model metadata.
 3. **ML Layer**
-   - Preprocessing + training + validation
-   - Artifact persistence
+  - Preprocessing + training + validation (encapsulated by the `MLEngine` class in `ml_engine.py`)
+  - Artifact persistence via `joblib`
    - Metrics persistence
 4. **Frontend (React Dashboard)**
    - Telemetry/risk views
@@ -261,11 +292,12 @@ The goal is **not** to create a clinically validated product. The goal is to dem
    - Email alerts for high-risk events
 
 ### Data Flow (Nominal)
+
 1. Synthetic telemetry generated/ingested.
-2. Data stored and made available for training/prediction.
+2. Data stored in Azure PostgreSQL and made available for training/prediction.
 3. Training is requested by UI action or schedule, which triggers Azure DevOps pipeline run.
 4. Azure DevOps queues the training job to the local self-hosted agent.
-5. Local agent trains/evaluates model and publishes artifacts/metrics back to Azure.
+5. Local agent performs an incremental pull of new telemetry data from PostgreSQL, updates its local Parquet cache, trains/evaluates the model, and publishes artifacts/metrics back to Azure.
 6. Candidate model is registered; active model is updated only if promotion gates pass.
 7. Predictions refresh dashboard risk views using the active model.
 8. High-risk predictions trigger email alert.
@@ -275,6 +307,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 ## 8) Azure DevOps Pipeline Design
 
 ### CI Pipeline (On Push/PR)
+
 - Install dependencies
 - Static checks/lint
 - Unit/integration tests
@@ -283,13 +316,16 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - Publish test reports
 
 ### CD Pipeline (On Main / Approved)
+
 - Deploy backend + frontend to hosted environment
 - Run smoke checks
 - Publish deployment metadata
 
 ### Scheduled MLOps Pipeline (Daily/Weekly)
+
 - Generate/ingest new synthetic batch
 - Queue training/evaluation job on local self-hosted Azure DevOps agent
+- **Data Sync:** Local agent performs an incremental pull of new telemetry data from Azure PostgreSQL and updates its local Parquet cache.
 - Retrain model on latest dataset (local PC compute)
 - Evaluate and log metrics
 - Publish/register versioned artifact back to Azure artifact storage/registry
@@ -297,11 +333,13 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - Refresh dashboard data source/state
 
 ### Hybrid Compute Notes
+
 - Hosted web app and API remain online in Azure; training/evaluation compute runs locally on the self-hosted agent.
 - If the local agent is offline, training jobs remain queued until the agent is available.
 - This setup is acceptable for demo/interview scope and can later migrate to cloud compute without changing pipeline contracts.
 
 ### Suggested Guardrails (optional, skip unless asked for)
+
 - Promotion gate: only activate new model if F1/Recall meet baseline threshold.
 - Rollback support: revert active model to previous stable version.
 
@@ -310,16 +348,20 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 ## 9) Data and Modeling Notes
 
 ### Synthetic Data Intent
+
 Telemetry should emulate plausible drift and degradation patterns, such as:
+
 - Increasing lead impedance trends
 - Rising capture thresholds
 - Falling R-wave sensing quality
 - Battery voltage decline
 
 ### Labeling Logic
+
 `Target_Fail_Next_7d` is engineered to represent near-term failure risk from synthetic/derived rules and event simulation.
 
 ### Baseline Modeling Plan
+
 - Start with Random Forest for interpretability and robust baseline performance.
 - Use chronological considerations to avoid leakage (time-aware splits where appropriate).
 - Track confusion matrix and threshold behavior to support risk-alert tuning.
@@ -329,6 +371,7 @@ Telemetry should emulate plausible drift and degradation patterns, such as:
 ## 10) Demo Readiness Requirements
 
 To maximize interview impact, the hosted application should support this narrative flow:
+
 1. Open public URL.
 2. Show live-like incoming telemetry updates.
 3. Show current active model and its metrics.
@@ -351,23 +394,30 @@ To maximize interview impact, the hosted application should support this narrati
 - **Risk:** Demo dependency failures (email service, hosting, pipeline trigger timing).
   - **Mitigation:** Add smoke checks, mock fallback mode, and pre-demo health checklist.
 
+- **Risk:** High database egress costs and slow training times due to large data transfers (2M+ rows).
+  - **Mitigation:** Implement an incremental pull strategy and local Parquet caching on the self-hosted agent to only fetch new rows.
+
 ---
 
 ## 12) Delivery Plan (Suggested)
 
 ### Phase 1 — Foundation
+
 - Define schema and generate initial 2M+ synthetic dataset.
 - Implement ingestion and storage path.
 
 ### Phase 2 — Baseline ML
+
 - Build preprocessing + training + evaluation pipeline.
 - Persist model artifacts and metrics history.
 
 ### Phase 3 — Product Surface
+
 - Build FastAPI endpoints and React dashboard views.
 - Add model selection + training trigger + risk table.
 
 ### Phase 4 — Automation + Hosting
+
 - Implement Azure DevOps CI/CD + scheduled MLOps pipeline.
 - Deploy hosted app and validate demo flow end-to-end.
 
