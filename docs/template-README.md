@@ -132,7 +132,7 @@ Before deploying it, make sure you change at least the values for:
 
 You can (and should) pass these as environment variables from secrets.
 
-Read the [deployment.md](./deployment.md) docs for more details.
+Read the [template-deployment.md](./template-deployment.md) docs for more details.
 
 ### Generate Secret Keys
 
@@ -172,11 +172,11 @@ Frontend docs: [frontend/README.md](../frontend/README.md).
 
 ## Deployment
 
-Deployment docs: [deployment.md](./deployment.md).
+Deployment docs: [template-deployment.md](./template-deployment.md).
 
 ## Development
 
-General development docs: [development.md](./development.md).
+General development docs: [template-development.md](./template-development.md).
 
 This includes using Docker Compose, custom local domains, `.env` configurations, etc.
 

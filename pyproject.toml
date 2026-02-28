@@ -1,2 +1,9 @@
 [tool.uv.workspace]
 members = ["backend"]
+
+[tool.ruff]
+extend-exclude = [
+	".agents",
+	".github/instructions",
+	".github/skills",
+]
