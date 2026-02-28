@@ -134,10 +134,13 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 
 - Uses scikit-learn for ML training.
 - Baseline model is Random Forest Classifier.
+- `MLEngine` class in `ml_engine.py` is the training orchestrator for preprocessing, model fitting, prediction, and model serialization.
 - Training pipeline includes preprocessing, feature selection/engineering, and cross-validation.
 - `Patient_ID` and raw `Timestamp` are excluded as direct predictive features unless transformed purposefully.
-- Trained model artifact is persisted with version metadata.
-- **Data Retrieval Strategy:** The local training script (`train.py`) connects directly to the Azure PostgreSQL database. To minimize data transfer and database load, it performs an incremental pull of new records based on the latest timestamp and appends them to a local Parquet cache file before loading into a pandas DataFrame for training.
+- `MLEngine` includes a data preparation step that isolates feature/target columns, drops non-predictive columns, and removes rows with missing values produced by rolling-window features.
+- `MLEngine` accepts configurable Random Forest hyperparameters (for example: `n_estimators`, `max_depth`, and `random_state`) through class initialization.
+- Trained model artifact is persisted with version metadata, with model serialization/deserialization implemented via `joblib`.
+- **Data Retrieval Strategy:** The local training script (`ml_engine.py`) connects directly to the Azure PostgreSQL database. To minimize data transfer and database load, it performs an incremental pull of new records based on the latest timestamp and appends them to a local Parquet cache file before loading into a pandas DataFrame for training.
 
 ### FR-4 Model Evaluation
 
@@ -145,7 +148,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - Evaluate overall model performance using Accuracy
 - Use Scikit-Learn’s `classification_report` to generate a comprehensive breakdown of Precision, Recall, F1-Score, and Support for each class.
 - Set `oob_score=True` within the `RandomForestClassifier` to natively compute the OOB score as a baseline metric.
-- Log all hyperparameter configurations and resulting evaluation metrics (Run History) to a structured format to enable comparison across models.
+- Log all hyperparameter configurations and resulting evaluation metrics (Run History) to a structured format to enable comparison across models; the training layer exposes applied hyperparameters and outputs for downstream run-history logging.
 
 ### FR-5 Model Registry and Selection
 
@@ -273,8 +276,8 @@ The goal is **not** to create a clinically validated product. The goal is to dem
    - Alert dispatch logic
    - **Storage:** Azure PostgreSQL database for telemetry records, users, and model metadata.
 3. **ML Layer**
-   - Preprocessing + training + validation
-   - Artifact persistence
+  - Preprocessing + training + validation (encapsulated by the `MLEngine` class in `ml_engine.py`)
+  - Artifact persistence via `joblib`
    - Metrics persistence
 4. **Frontend (React Dashboard)**
    - Telemetry/risk views
