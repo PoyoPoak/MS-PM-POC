@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -5,12 +6,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+logger = logging.getLogger(__name__)
+
 
 def generate_predictive_telemetry(
     num_patients=1000,
     pings_per_day=1,
     num_days=1825,
-    failure_rate=0.05,
+    failure_rate=0.2,
     filename="pacemaker_data.csv",
     save_csv=True,
 ):
@@ -19,7 +22,8 @@ def generate_predictive_telemetry(
 
     The function creates a chronological baseline of healthy device metrics for each patient, injects
     realistic multi-day degradation curves for a subset of failing devices, labels the 7-day pre-failure
-    warning window (`Target_Fail_Next_7d`), applies an explant rule to remove post-failure records,
+    warning window (`Target_Fail_Next_7d`), applies an explant rule to remove all failure-time and
+    post-failure records,
     and engineers temporal rolling/trend features.
 
     Data Map:
@@ -43,16 +47,18 @@ def generate_predictive_telemetry(
         num_patients (int, optional): Number of patients to simulate data from. Defaults to 1000.
         pings_per_day (int, optional): Number of telemetry pings per day. Defaults to 1.
         num_days (int, optional): Number of days of data to generate. Defaults to 1825.
-        failure_rate (float, optional): Proportion of patients that will experience device failure. Defaults to 0.05.
-        filename (str, optional): Name of the output CSV file. Relative paths are saved under ./data. Defaults to "pacemaker_data.csv".
+        failure_rate (float, optional): Proportion of patients that will experience device failure. Defaults to 0.2.
+        filename (str, optional): Name of the output CSV file. Relative paths are saved under ./backend/util/data. Defaults to "pacemaker_data.csv".
         save_csv (bool, optional): Whether to save the generated data to a CSV file. Defaults to True.
 
     Returns:
         pd.DataFrame: A synthetic telemetry dataset with baseline signals, failure labels,
         and engineered rolling/trend features.
     """
-    print( 
-        f"Generating predictive data for {num_patients} patients over {num_days} days..."
+    logger.info(
+        "Generating predictive data for %d patients over %d days...",
+        num_patients,
+        num_days,
     )
 
     # Validate input parameters
@@ -78,7 +84,7 @@ def generate_predictive_telemetry(
     # Handle output path
     output_path = Path(filename)
     if save_csv and not output_path.is_absolute() and output_path.parent == Path("."):
-        output_path = Path("data") / output_path
+        output_path = Path(__file__).resolve().parent / "data" / output_path
 
     # Ensure we have enough data points to support failure injection and the predictive target window
     total_points_per_patient = num_days * pings_per_day
@@ -126,7 +132,9 @@ def generate_predictive_telemetry(
     failure_types = ["impedance", "threshold", "sensing", "battery"]
     rows_to_drop = []  # Track rows to drop after device explant
 
-    print(f"Injecting degradation curves into {num_failing_patients} patients...")
+    logger.info(
+        "Injecting degradation curves into %d patients...", num_failing_patients
+    )
 
     for pid in failing_patient_ids:
         patient_mask = df["Patient_ID"] == pid
@@ -141,7 +149,8 @@ def generate_predictive_telemetry(
 
         # Label the 7 days prior to failure as our predictive target (The Danger Zone)
         target_start_idx = fail_idx - (7 * pings_per_day)
-        df.loc[target_start_idx:fail_idx, "Target_Fail_Next_7d"] = 1
+        target_end_idx = fail_idx - 1
+        df.loc[target_start_idx:target_end_idx, "Target_Fail_Next_7d"] = 1
 
         # Apply the gradual drift based on failure type
         fail_type = np.random.choice(failure_types)
@@ -151,10 +160,6 @@ def generate_predictive_telemetry(
                 0, 50, degradation_days
             )
             df.loc[start_deg_idx : fail_idx - 1, "Lead_Impedance_Ohms"] += drift
-            # Hard failure
-            df.loc[fail_idx:, "Lead_Impedance_Ohms"] = np.random.uniform(
-                2500.0, 3000.0, size=len(df.loc[fail_idx:])
-            )
 
         elif fail_type == "battery":
             # Battery drops rapidly to 2.4V
@@ -162,9 +167,6 @@ def generate_predictive_telemetry(
                 0, 0.02, degradation_days
             )
             df.loc[start_deg_idx : fail_idx - 1, "Battery_Voltage_V"] -= drift
-            df.loc[fail_idx:, "Battery_Voltage_V"] = np.random.uniform(
-                2.20, 2.40, size=len(df.loc[fail_idx:])
-            )
 
         elif fail_type == "threshold":
             # Voltage needed to capture heart rises
@@ -172,26 +174,20 @@ def generate_predictive_telemetry(
                 0, 0.1, degradation_days
             )
             df.loc[start_deg_idx : fail_idx - 1, "Capture_Threshold_V"] += drift
-            df.loc[fail_idx:, "Capture_Threshold_V"] = np.random.uniform(
-                2.50, 3.50, size=len(df.loc[fail_idx:])
-            )
 
         elif fail_type == "sensing":
-            # R-wave sensing quality degrades and then collapses after failure
+            # R-wave sensing quality degrades approaching failure
             drift = np.linspace(0, 8.5, degradation_days) + np.random.normal(
                 0, 0.4, degradation_days
             )
             df.loc[start_deg_idx : fail_idx - 1, "R_Wave_Sensing_mV"] -= drift
-            df.loc[fail_idx:, "R_Wave_Sensing_mV"] = np.random.uniform(
-                0.2, 2.0, size=len(df.loc[fail_idx:])
-            )
 
-        # The "Explant Rule": Mark data 3 days after failure to be dropped (device was replaced)
-        drop_start_idx = fail_idx + (3 * pings_per_day)
+        # The "Explant Rule": no telemetry at or after failure (device replaced immediately)
+        drop_start_idx = fail_idx
         rows_to_drop.extend(range(drop_start_idx, patient_indices[-1] + 1))
 
     # 4. Cleanup and Formatting
-    print("Applying Explant Rule (dropping post-failure data)...")
+    logger.info("Applying Explant Rule (dropping post-failure data)...")
     df = df.drop(index=rows_to_drop).reset_index(drop=True)
 
     df["Lead_Impedance_Ohms"] = np.round(df["Lead_Impedance_Ohms"], 2)
@@ -247,7 +243,7 @@ def generate_predictive_telemetry(
     if save_csv:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(output_path, index=False)
-        print(f"Dataset saved to '{output_path}'. Total rows: {len(df):,}")
+        logger.info("Dataset saved to '%s'. Total rows: %d", output_path, len(df))
 
     return df
 
