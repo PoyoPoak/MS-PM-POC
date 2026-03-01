@@ -100,21 +100,21 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - System provides `generate_data.py` (or equivalent service task) to create initial telemetry dataset with ~2,000,000+ rows.
 - The data generation script I already have created and will import it as generate_data.py.
 - Data schema includes:
-  - `Patient_ID`: Integer identifier for each patient/device (0..num_patients-1).
-  - `Timestamp`: Unix timestamp of each telemetry ping.
-  - `Lead_Impedance_Ohms`: Electrical impedance of the lead, which can indicate lead integrity issues.
-  - `Capture_Threshold_V`: Voltage required to capture the heart, which can rise as the device degrades.
-  - `R_Wave_Sensing_mV`: Quality of R-wave sensing, which can drop as the device fails.
-  - `Battery_Voltage_V`: Voltage of the device battery, which can drop rapidly before failure.
-  - `Target_Fail_Next_7d`: Binary target variable indicating if the device will fail within the next 7 days (1) or not (0).
-  - `Lead_Impedance_Ohms_RollingMean_3d`: Trailing 3-day rolling mean of lead impedance.
-  - `Lead_Impedance_Ohms_RollingMean_7d`: Trailing 7-day rolling mean of lead impedance.
-  - `Capture_Threshold_V_RollingMean_3d`: Trailing 3-day rolling mean of capture threshold.
-  - `Capture_Threshold_V_RollingMean_7d`: Trailing 7-day rolling mean of capture threshold.
-  - `Lead_Impedance_Ohms_DeltaPerDay_3d`: Average per-day change in impedance over trailing 3 days.
-  - `Lead_Impedance_Ohms_DeltaPerDay_7d`: Average per-day change in impedance over trailing 7 days.
-  - `Capture_Threshold_V_DeltaPerDay_3d`: Average per-day change in threshold over trailing 3 days.
-  - `Capture_Threshold_V_DeltaPerDay_7d`: Average per-day change in threshold over trailing 7 days.
+  - `patient_id`: Integer identifier for each patient/device (0..num_patients-1).
+  - `timestamp`: Unix timestamp of each telemetry ping.
+  - `lead_impedance_ohms`: Electrical impedance of the lead, which can indicate lead integrity issues.
+  - `capture_threshold_v`: Voltage required to capture the heart, which can rise as the device degrades.
+  - `r_wave_sensing_mv`: Quality of R-wave sensing, which can drop as the device fails.
+  - `battery_voltage_v`: Voltage of the device battery, which can drop rapidly before failure.
+  - `target_fail_next_7d`: Binary target variable indicating if the device will fail within the next 7 days (1) or not (0).
+  - `lead_impedance_ohms_rolling_mean_3d`: Trailing 3-day rolling mean of lead impedance.
+  - `lead_impedance_ohms_rolling_mean_7d`: Trailing 7-day rolling mean of lead impedance.
+  - `capture_threshold_v_rolling_mean_3d`: Trailing 3-day rolling mean of capture threshold.
+  - `capture_threshold_v_rolling_mean_7d`: Trailing 7-day rolling mean of capture threshold.
+  - `lead_impedance_ohms_delta_per_day_3d`: Average per-day change in impedance over trailing 3 days.
+  - `lead_impedance_ohms_delta_per_day_7d`: Average per-day change in impedance over trailing 7 days.
+  - `capture_threshold_v_delta_per_day_3d`: Average per-day change in threshold over trailing 3 days.
+  - `capture_threshold_v_delta_per_day_7d`: Average per-day change in threshold over trailing 7 days.
 - System supports continuous synthetic increments to simulate live telemetry data arrival.
 
 ### FR-2 Data Ingestion API
@@ -363,7 +363,7 @@ Telemetry should emulate plausible drift and degradation patterns, such as:
 
 ### Labeling Logic
 
-`Target_Fail_Next_7d` is engineered to represent near-term failure risk from synthetic/derived rules and event simulation.
+`target_fail_next_7d` is engineered to represent near-term failure risk from synthetic/derived rules and event simulation.
 
 ### Baseline Modeling Plan
 

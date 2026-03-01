@@ -2,7 +2,7 @@
 
 ## 1) Why this document exists
 
-This project predicts whether a pacemaker will fail in the next 7 days (`Target_Fail_Next_7d`).
+This project predicts whether a pacemaker will fail in the next 7 days (`target_fail_next_7d`).
 Because that target is outcome-based, most newly ingested telemetry rows are unlabeled at arrival time.
 
 This document defines the production-style pattern used in this repo:
@@ -26,8 +26,8 @@ Instead, labels come only from observed (or simulator-defined) outcomes.
 
 For a telemetry row at time $\tau$ for a specific patient/device:
 
-- `Target_Fail_Next_7d = 1` if a confirmed failure event time `f` exists such that $\tau < f \leq \tau + 7\text{ days}$
-- `Target_Fail_Next_7d = 0` otherwise (once full 7-day follow-up is available)
+- `target_fail_next_7d = 1` if a confirmed failure event time `f` exists such that $\tau < f \leq \tau + 7\text{ days}$
+- `target_fail_next_7d = 0` otherwise (once full 7-day follow-up is available)
 
 Implication:
 

@@ -32,6 +32,10 @@ COPY ./backend/scripts /app/backend/scripts
 COPY ./backend/pyproject.toml ./backend/alembic.ini /app/backend/
 
 COPY ./backend/app /app/backend/app
+RUN if [ -d backend/util/data ]; then \
+    mkdir -p /app/backend/util/data && \
+    cp -a backend/util/data/. /app/backend/util/data; \
+    fi
 
 # Sync the project
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers

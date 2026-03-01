@@ -108,6 +108,37 @@ class ItemsPublic(SQLModel):
     count: int
 
 
+class PacemakerTelemetryBase(SQLModel):
+    patient_id: int = Field(index=True)
+    timestamp: datetime = Field(
+        sa_type=DateTime(timezone=True),  # type: ignore
+        index=True,
+    )
+    lead_impedance_ohms: float
+    capture_threshold_v: float
+    r_wave_sensing_mv: float
+    battery_voltage_v: float
+    target_fail_next_7d: int | None = Field(default=None)
+    lead_impedance_ohms_rolling_mean_3d: float | None = Field(default=None)
+    lead_impedance_ohms_rolling_mean_7d: float | None = Field(default=None)
+    capture_threshold_v_rolling_mean_3d: float | None = Field(default=None)
+    capture_threshold_v_rolling_mean_7d: float | None = Field(default=None)
+    lead_impedance_ohms_delta_per_day_3d: float | None = Field(default=None)
+    lead_impedance_ohms_delta_per_day_7d: float | None = Field(default=None)
+    capture_threshold_v_delta_per_day_3d: float | None = Field(default=None)
+    capture_threshold_v_delta_per_day_7d: float | None = Field(default=None)
+
+
+class PacemakerTelemetry(PacemakerTelemetryBase, table=True):
+    __tablename__ = "pacemaker_telemetry"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+
+
 # Generic message
 class Message(SQLModel):
     message: str
