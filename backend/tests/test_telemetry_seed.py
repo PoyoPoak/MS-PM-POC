@@ -37,7 +37,7 @@ def test_seed_pacemaker_telemetry_inserts_when_empty(
     db.exec(delete(PacemakerTelemetry))
     db.commit()
 
-    csv_path = tmp_path / "pacemaker_data.csv"
+    csv_path = tmp_path / "pacemaker_data_seed.csv"
     _write_csv(
         csv_path,
         [
@@ -73,7 +73,7 @@ def test_seed_pacemaker_telemetry_appends_when_table_has_rows(
     db.add(existing)
     db.commit()
 
-    csv_path = tmp_path / "pacemaker_data.csv"
+    csv_path = tmp_path / "pacemaker_data_seed.csv"
     _write_csv(
         csv_path,
         [
@@ -96,7 +96,7 @@ def test_seed_pacemaker_telemetry_skips_when_flag_disabled(
     db.exec(delete(PacemakerTelemetry))
     db.commit()
 
-    csv_path = tmp_path / "pacemaker_data.csv"
+    csv_path = tmp_path / "pacemaker_data_seed.csv"
     _write_csv(
         csv_path,
         [
@@ -142,7 +142,7 @@ def test_seed_pacemaker_telemetry_inserts_same_number_of_rows_as_csv(
         "103,1700007200,525,1.0,8.7,2.7,1,520,518,0.98,0.97,0.6,0.4,0.05,0.03",
     ]
 
-    csv_path = tmp_path / "pacemaker_data.csv"
+    csv_path = tmp_path / "pacemaker_data_seed.csv"
     _write_csv(csv_path, csv_rows)
 
     seed_pacemaker_telemetry_if_empty(db, csv_path=csv_path, batch_size=2)

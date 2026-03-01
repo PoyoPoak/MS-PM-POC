@@ -43,12 +43,16 @@ def generate_predictive_telemetry(
     - Capture_Threshold_V_DeltaPerDay_3d: Average per-day change in threshold over trailing 3 days.
     - Capture_Threshold_V_DeltaPerDay_7d: Average per-day change in threshold over trailing 7 days.
 
+        Row ordering:
+        - Rows are ordered by Timestamp first, then Patient_ID, so all patients are represented in parallel
+            for each telemetry interval.
+
     Args:
         num_patients (int, optional): Number of patients to simulate data from. Defaults to 1000.
         pings_per_day (int, optional): Number of telemetry pings per day. Defaults to 1.
         num_days (int, optional): Number of days of data to generate. Defaults to 1825.
         failure_rate (float, optional): Proportion of patients that will experience device failure. Defaults to 0.2.
-        filename (str, optional): Name of the output CSV file. Relative paths are saved under ./backend/util/data. Defaults to "pacemaker_data.csv".
+        filename (str, optional): Name of the output CSV file. Relative paths are saved under ./backend/util/data. Defaults to "pacemaker_data_seed.csv".
         save_csv (bool, optional): Whether to save the generated data to a CSV file. Defaults to True.
 
     Returns:
@@ -88,14 +92,19 @@ def generate_predictive_telemetry(
 
     # Ensure we have enough data points to support failure injection and the predictive target window
     total_points_per_patient = num_days * pings_per_day
-    min_points_required_for_failure_injection = 111
+    normal_data_points = 100 * pings_per_day
+    post_failure_buffer_points = 10 * pings_per_day
+    min_points_required_for_failure_injection = (
+        normal_data_points + post_failure_buffer_points + 1
+    )
     if (
         total_points_per_patient < min_points_required_for_failure_injection
         and failure_rate > 0
     ):
         raise ValueError(
-            "num_days * pings_per_day must be at least 111 when failure_rate > 0 "
-            "to support degradation and target windows."
+            "num_days * pings_per_day must be at least "
+            f"{min_points_required_for_failure_injection} when failure_rate > 0 "
+            "to support baseline, degradation, and target windows."
         )
 
     np.random.seed(42)
@@ -110,9 +119,9 @@ def generate_predictive_telemetry(
     timestamps.reverse()
 
     idx = pd.MultiIndex.from_product(
-        [patient_ids, timestamps], names=["Patient_ID", "Timestamp"]
+        [timestamps, patient_ids], names=["Timestamp", "Patient_ID"]
     )
-    df = pd.DataFrame(index=idx).reset_index()
+    df = pd.DataFrame(index=idx).reset_index()[["Patient_ID", "Timestamp"]]
 
     # 2. Generate Healthy Baseline Metrics
     df["Lead_Impedance_Ohms"] = np.random.normal(500.0, 30.0, size=len(df))
@@ -138,19 +147,24 @@ def generate_predictive_telemetry(
 
     for pid in failing_patient_ids:
         patient_mask = df["Patient_ID"] == pid
-        patient_indices = df[patient_mask].index
+        patient_indices = df.index[patient_mask].to_numpy()
 
-        # Pick a failure day (ensure they have at least 100 days of normal data first)
-        fail_idx = np.random.choice(patient_indices[100:-10])
+        # Pick a failure point (ensure they have at least 100 days of normal data first)
+        fail_pos = np.random.randint(
+            normal_data_points,
+            len(patient_indices) - post_failure_buffer_points,
+        )
 
         # Define the warning window (e.g., the device degrades over 14 days)
         degradation_days = 14 * pings_per_day
-        start_deg_idx = fail_idx - degradation_days
+        start_deg_pos = fail_pos - degradation_days
+        degradation_indices = patient_indices[start_deg_pos:fail_pos]
 
         # Label the 7 days prior to failure as our predictive target (The Danger Zone)
-        target_start_idx = fail_idx - (7 * pings_per_day)
-        target_end_idx = fail_idx - 1
-        df.loc[target_start_idx:target_end_idx, "Target_Fail_Next_7d"] = 1
+        target_start_pos = fail_pos - (7 * pings_per_day)
+        target_end_pos = fail_pos
+        target_indices = patient_indices[target_start_pos:target_end_pos]
+        df.loc[target_indices, "Target_Fail_Next_7d"] = 1
 
         # Apply the gradual drift based on failure type
         fail_type = np.random.choice(failure_types)
@@ -159,36 +173,38 @@ def generate_predictive_telemetry(
             drift = np.linspace(0, 2000, degradation_days) + np.random.normal(
                 0, 50, degradation_days
             )
-            df.loc[start_deg_idx : fail_idx - 1, "Lead_Impedance_Ohms"] += drift
+            df.loc[degradation_indices, "Lead_Impedance_Ohms"] += drift
 
         elif fail_type == "battery":
             # Battery drops rapidly to 2.4V
             drift = np.linspace(0, 0.55, degradation_days) + np.random.normal(
                 0, 0.02, degradation_days
             )
-            df.loc[start_deg_idx : fail_idx - 1, "Battery_Voltage_V"] -= drift
+            df.loc[degradation_indices, "Battery_Voltage_V"] -= drift
 
         elif fail_type == "threshold":
             # Voltage needed to capture heart rises
             drift = np.linspace(0, 2.0, degradation_days) + np.random.normal(
                 0, 0.1, degradation_days
             )
-            df.loc[start_deg_idx : fail_idx - 1, "Capture_Threshold_V"] += drift
+            df.loc[degradation_indices, "Capture_Threshold_V"] += drift
 
         elif fail_type == "sensing":
             # R-wave sensing quality degrades approaching failure
             drift = np.linspace(0, 8.5, degradation_days) + np.random.normal(
                 0, 0.4, degradation_days
             )
-            df.loc[start_deg_idx : fail_idx - 1, "R_Wave_Sensing_mV"] -= drift
+            df.loc[degradation_indices, "R_Wave_Sensing_mV"] -= drift
 
         # The "Explant Rule": no telemetry at or after failure (device replaced immediately)
-        drop_start_idx = fail_idx
-        rows_to_drop.extend(range(drop_start_idx, patient_indices[-1] + 1))
+        rows_to_drop.extend(patient_indices[fail_pos:].tolist())
 
     # 4. Cleanup and Formatting
     logger.info("Applying Explant Rule (dropping post-failure data)...")
     df = df.drop(index=rows_to_drop).reset_index(drop=True)
+    df = df.sort_values(["Timestamp", "Patient_ID"], kind="stable").reset_index(
+        drop=True
+    )
 
     df["Lead_Impedance_Ohms"] = np.round(df["Lead_Impedance_Ohms"], 2)
     df["Capture_Threshold_V"] = np.round(df["Capture_Threshold_V"], 2)

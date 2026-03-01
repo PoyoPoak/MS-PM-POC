@@ -43,6 +43,12 @@ uv run bash scripts/prestart.sh   # runs migrations + seeds as needed
 uv run bash scripts/tests-start.sh   # runs backend tests (requires DB)
 ```
 
+Telemetry ingestion behavior (demo)
+
+- Default startup is empty-table telemetry (`SEED_PACEMAKER_DATA=False` in `.env-template`).
+- Bulk ingest endpoint: `POST /api/v1/telemetry/ingest`
+- Expected request payload: JSON array of telemetry rows (variable-size daily batches; typical upper target ~1000 rows/day, max 2000 rows/request).
+
 Frontend setup
 
 ```bash
@@ -73,4 +79,5 @@ bash ./scripts/generate-client.sh
 - Backend entrypoint: [backend/app/main.py](backend/app/main.py#L1)
 - Models and CRUD: [backend/app/models.py](backend/app/models.py#L1) and [backend/app/crud.py](backend/app/crud.py#L1)
 - Data generation helper: [backend/util/generate_data.py](backend/util/generate_data.py#L1)
+- Data generator documentation: [docs/data-generator.md](docs/data-generator.md)
 - Client generation script: [scripts/generate-client.sh](scripts/generate-client.sh#L1)

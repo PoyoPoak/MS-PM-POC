@@ -148,6 +148,8 @@ Expected training columns from generated telemetry:
 Notes:
 - If inference data misses any trained feature columns, prediction raises a `ValueError`
 - Additional unused columns are allowed and passed through in prediction output
+- Generated training data is ordered by `Timestamp` then `Patient_ID` to simulate parallel telemetry arrival across active patients
+- See `docs/data-generator.md` for generator behavior details
 
 ## Typical Usage
 
@@ -177,7 +179,7 @@ artifact_dir = engine.save_artifact()
 from backend.util.ml_engine import MLEngine
 
 engine = MLEngine()
-engine.train("backend/util/data/pacemaker_data.csv")
+engine.train("backend/util/data/pacemaker_data_seed.csv")
 metrics = engine.evaluate()
 ```
 

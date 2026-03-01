@@ -226,6 +226,170 @@ export const NewPasswordSchema = {
     title: 'NewPassword'
 } as const;
 
+export const PacemakerTelemetryIngestSchema = {
+    properties: {
+        patient_id: {
+            type: 'integer',
+            minimum: 0,
+            title: 'Patient Id'
+        },
+        timestamp: {
+            type: 'integer',
+            minimum: 0,
+            title: 'Timestamp',
+            description: 'Unix epoch timestamp in seconds (UTC).'
+        },
+        lead_impedance_ohms: {
+            type: 'number',
+            title: 'Lead Impedance Ohms'
+        },
+        capture_threshold_v: {
+            type: 'number',
+            title: 'Capture Threshold V'
+        },
+        r_wave_sensing_mv: {
+            type: 'number',
+            title: 'R Wave Sensing Mv'
+        },
+        battery_voltage_v: {
+            type: 'number',
+            title: 'Battery Voltage V'
+        },
+        target_fail_next_7d: {
+            anyOf: [
+                {
+                    type: 'integer',
+                    maximum: 1,
+                    minimum: 0
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Target Fail Next 7D'
+        },
+        lead_impedance_ohms_rolling_mean_3d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lead Impedance Ohms Rolling Mean 3D'
+        },
+        lead_impedance_ohms_rolling_mean_7d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lead Impedance Ohms Rolling Mean 7D'
+        },
+        capture_threshold_v_rolling_mean_3d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Capture Threshold V Rolling Mean 3D'
+        },
+        capture_threshold_v_rolling_mean_7d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Capture Threshold V Rolling Mean 7D'
+        },
+        lead_impedance_ohms_delta_per_day_3d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lead Impedance Ohms Delta Per Day 3D'
+        },
+        lead_impedance_ohms_delta_per_day_7d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lead Impedance Ohms Delta Per Day 7D'
+        },
+        capture_threshold_v_delta_per_day_3d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Capture Threshold V Delta Per Day 3D'
+        },
+        capture_threshold_v_delta_per_day_7d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Capture Threshold V Delta Per Day 7D'
+        }
+    },
+    type: 'object',
+    required: ['patient_id', 'timestamp', 'lead_impedance_ohms', 'capture_threshold_v', 'r_wave_sensing_mv', 'battery_voltage_v'],
+    title: 'PacemakerTelemetryIngest'
+} as const;
+
+export const PacemakerTelemetryIngestResultSchema = {
+    properties: {
+        received_count: {
+            type: 'integer',
+            title: 'Received Count'
+        },
+        inserted_count: {
+            type: 'integer',
+            title: 'Inserted Count'
+        },
+        duplicate_count: {
+            type: 'integer',
+            title: 'Duplicate Count'
+        },
+        duplicate_in_payload_count: {
+            type: 'integer',
+            title: 'Duplicate In Payload Count'
+        },
+        duplicate_existing_count: {
+            type: 'integer',
+            title: 'Duplicate Existing Count'
+        }
+    },
+    type: 'object',
+    required: ['received_count', 'inserted_count', 'duplicate_count', 'duplicate_in_payload_count', 'duplicate_existing_count'],
+    title: 'PacemakerTelemetryIngestResult'
+} as const;
+
 export const PrivateUserCreateSchema = {
     properties: {
         email: {

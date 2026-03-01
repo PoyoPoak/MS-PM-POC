@@ -62,3 +62,80 @@ This document defines only the features used for pacemaker failure prediction co
 ### capture_threshold_v_delta_per_day_7d
 - Average per-day change in `capture_threshold_v` over trailing 7 days.
 - Quantifies weekly threshold progression.
+
+## Telemetry Ingestion API Contract (Demo V1)
+
+- Endpoint: `POST /api/v1/telemetry/ingest`
+- Authentication: superuser token required.
+- Request body: JSON array of telemetry rows (variable daily batch size; typical upper target ~1000 rows/day, maximum 2000 rows/request).
+
+### Required fields per row
+
+- `patient_id` (integer, >= 0)
+- `timestamp` (Unix epoch seconds, UTC)
+- `lead_impedance_ohms` (number)
+- `capture_threshold_v` (number)
+- `r_wave_sensing_mv` (number)
+- `battery_voltage_v` (number)
+
+### Optional fields per row
+
+- `target_fail_next_7d` (`0`, `1`, or `null`)
+- All engineered rolling/delta feature fields listed above.
+
+### Duplicate behavior
+
+- Rows are considered duplicates when `patient_id` and `timestamp` match.
+- Duplicates are not inserted and are reported in the response summary (`duplicate_count`, `duplicate_in_payload_count`, `duplicate_existing_count`).
+
+## Standalone Telemetry Replay Script
+
+- Script: `backend/util/replay_telemetry.py`
+- Purpose: replay generated CSV telemetry to the ingest endpoint in day-level batches at a configurable millisecond interval.
+- Batch behavior: requests are grouped by UTC day. Because simulated failed devices stop reporting, later days naturally contain fewer rows than earlier days.
+
+### Default behavior
+
+- Input CSV: `backend/util/data/pacemaker_data.csv`
+- Endpoint: `http://localhost:8000/api/v1/telemetry/ingest`
+- Request pacing: `--interval-ms 1000`
+- Auth token: optional `--token` argument, or `TELEMETRY_INGEST_TOKEN` environment variable.
+
+### Example
+
+```bash
+cd backend
+uv run python util/replay_telemetry.py --interval-ms 500 --token "$TELEMETRY_INGEST_TOKEN"
+```
+
+### Dry run
+
+```bash
+cd backend
+uv run python util/replay_telemetry.py --dry-run --interval-ms 0 --verbose
+```
+
+## Telemetry Ingestion API Contract (Demo V1)
+
+- Endpoint: `POST /api/v1/telemetry/ingest`
+- Authentication: superuser token required.
+- Request body: JSON array of telemetry rows (variable daily batch size; typical upper target ~1000 rows/day, maximum 2000 rows/request).
+
+### Required fields per row
+
+- `patient_id` (integer, >= 0)
+- `timestamp` (Unix epoch seconds, UTC)
+- `lead_impedance_ohms` (number)
+- `capture_threshold_v` (number)
+- `r_wave_sensing_mv` (number)
+- `battery_voltage_v` (number)
+
+### Optional fields per row
+
+- `target_fail_next_7d` (`0`, `1`, or `null`)
+- All engineered rolling/delta feature fields listed above.
+
+### Duplicate behavior
+
+- Rows are considered duplicates when `patient_id` and `timestamp` match.
+- Duplicates are not inserted and are reported in the response summary (`duplicate_count`, `duplicate_in_payload_count`, `duplicate_existing_count`).

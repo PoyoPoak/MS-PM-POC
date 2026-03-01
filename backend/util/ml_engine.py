@@ -17,7 +17,7 @@ Typical usage
 
     # --- Train & evaluate ---
     engine = MLEngine(n_estimators=200, max_depth=20)
-    engine.train("backend/util/data/pacemaker_data.csv")
+    engine.train("backend/util/data/pacemaker_data_seed.csv")
     metrics = engine.evaluate()
     artifact_dir = engine.save_artifact()
 
@@ -616,7 +616,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "csv_path",
         nargs="?",
-        default=str(Path(__file__).parent / "data" / "pacemaker_data.csv"),
+        default=str(Path(__file__).parent / "data" / "pacemaker_data_seed.csv"),
         help="CSV path used for training and smoke predictions.",
     )
     parser.add_argument(
