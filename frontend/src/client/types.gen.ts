@@ -45,6 +45,35 @@ export type NewPassword = {
     new_password: string;
 };
 
+export type PacemakerTelemetryIngest = {
+    patient_id: number;
+    /**
+     * Unix epoch timestamp in seconds (UTC).
+     */
+    timestamp: number;
+    lead_impedance_ohms: number;
+    capture_threshold_v: number;
+    r_wave_sensing_mv: number;
+    battery_voltage_v: number;
+    target_fail_next_7d?: (number | null);
+    lead_impedance_ohms_rolling_mean_3d?: (number | null);
+    lead_impedance_ohms_rolling_mean_7d?: (number | null);
+    capture_threshold_v_rolling_mean_3d?: (number | null);
+    capture_threshold_v_rolling_mean_7d?: (number | null);
+    lead_impedance_ohms_delta_per_day_3d?: (number | null);
+    lead_impedance_ohms_delta_per_day_7d?: (number | null);
+    capture_threshold_v_delta_per_day_3d?: (number | null);
+    capture_threshold_v_delta_per_day_7d?: (number | null);
+};
+
+export type PacemakerTelemetryIngestResult = {
+    received_count: number;
+    inserted_count: number;
+    duplicate_count: number;
+    duplicate_in_payload_count: number;
+    duplicate_existing_count: number;
+};
+
 export type PrivateUserCreate = {
     email: string;
     password: string;
@@ -172,6 +201,12 @@ export type PrivateCreateUserData = {
 };
 
 export type PrivateCreateUserResponse = (UserPublic);
+
+export type TelemetryIngestTelemetryBulkData = {
+    requestBody: Array<PacemakerTelemetryIngest>;
+};
+
+export type TelemetryIngestTelemetryBulkResponse = (PacemakerTelemetryIngestResult);
 
 export type UsersReadUsersData = {
     limit?: number;

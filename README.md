@@ -43,6 +43,12 @@ uv run bash scripts/prestart.sh   # runs migrations + seeds as needed
 uv run bash scripts/tests-start.sh   # runs backend tests (requires DB)
 ```
 
+Telemetry ingestion behavior (demo)
+
+- Default startup is empty-table telemetry (`SEED_PACEMAKER_DATA=False` in `.env-template`).
+- Bulk ingest endpoint: `POST /api/v1/telemetry/ingest`
+- Expected request payload: JSON array of telemetry rows (variable-size daily batches; typical upper target ~1000 rows/day, max 2000 rows/request).
+
 Frontend setup
 
 ```bash

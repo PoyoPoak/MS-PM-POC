@@ -139,6 +139,35 @@ class PacemakerTelemetry(PacemakerTelemetryBase, table=True):
     )
 
 
+class PacemakerTelemetryIngest(SQLModel):
+    patient_id: int = Field(ge=0)
+    timestamp: int = Field(
+        ge=0,
+        description="Unix epoch timestamp in seconds (UTC).",
+    )
+    lead_impedance_ohms: float
+    capture_threshold_v: float
+    r_wave_sensing_mv: float
+    battery_voltage_v: float
+    target_fail_next_7d: int | None = Field(default=None, ge=0, le=1)
+    lead_impedance_ohms_rolling_mean_3d: float | None = Field(default=None)
+    lead_impedance_ohms_rolling_mean_7d: float | None = Field(default=None)
+    capture_threshold_v_rolling_mean_3d: float | None = Field(default=None)
+    capture_threshold_v_rolling_mean_7d: float | None = Field(default=None)
+    lead_impedance_ohms_delta_per_day_3d: float | None = Field(default=None)
+    lead_impedance_ohms_delta_per_day_7d: float | None = Field(default=None)
+    capture_threshold_v_delta_per_day_3d: float | None = Field(default=None)
+    capture_threshold_v_delta_per_day_7d: float | None = Field(default=None)
+
+
+class PacemakerTelemetryIngestResult(SQLModel):
+    received_count: int
+    inserted_count: int
+    duplicate_count: int
+    duplicate_in_payload_count: int
+    duplicate_existing_count: int
+
+
 # Generic message
 class Message(SQLModel):
     message: str

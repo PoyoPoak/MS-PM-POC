@@ -121,6 +121,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 ### FR-2 Data Ingestion API
 
 - Backend can either seed the database with the initial synthetic dataset or provide an endpoint to receive data uploads.
+- Default local demo behavior starts with an empty telemetry table (`SEED_PACEMAKER_DATA=False`) and receives incremental data through API ingestion.
 - Backend will exposes endpoint(s) to perform the following:
   - Receive/add new telemetry records.
   - Get information about current data, models, and metrics.
@@ -130,6 +131,10 @@ The goal is **not** to create a clinically validated product. The goal is to dem
   - Retrieve model performance metrics and version history.
   - Trigger email alerts for high-risk predictions.
 - Incoming records are validated and appended to the dataset/store (Azure PostgreSQL database).
+- Primary ingest contract for the demo is a superuser-protected bulk POST endpoint (`/api/v1/telemetry/ingest`) that accepts a JSON array payload (typical daily batch up to ~1000 rows, max 2000 rows/request).
+- Batch size is variable: smaller batches are expected when some simulated patient devices stop reporting (for example due to failure events).
+- Each row requires `patient_id`, Unix-epoch `timestamp` (seconds, UTC), `lead_impedance_ohms`, `capture_threshold_v`, `r_wave_sensing_mv`, and `battery_voltage_v`; engineered features and `target_fail_next_7d` are optional.
+- Duplicate rows (same `patient_id` + `timestamp`) are rejected and reported in the ingestion response summary.
 - Ingestion events are auditable (timestamped run/event metadata).
 - **Labeling and Training Window Brief:** Newly ingested telemetry is treated as unlabeled at arrival time for supervised retraining purposes. The active model still performs immediate inference for risk monitoring/alerts, while `Target_Fail_Next_7d` is backfilled only after the 7-day outcome window matures (or a failure event is confirmed within that window). Retraining jobs use only matured, outcome-labeled rows and never treat model predictions as ground-truth labels.
 

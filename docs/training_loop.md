@@ -43,6 +43,8 @@ Implication:
 Runs continuously as telemetry arrives.
 
 1. Ingest telemetry row(s) and validate schema.
+	- Demo implementation uses bulk ingestion via `POST /api/v1/telemetry/ingest` with ~1000 rows/day batches.
+	- New local environments default to empty-start ingestion (`SEED_PACEMAKER_DATA=False`).
 2. Compute any required derived features.
 3. Score with current active model.
 4. Persist prediction probability and risk flag.
