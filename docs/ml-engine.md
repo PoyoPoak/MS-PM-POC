@@ -231,7 +231,6 @@ python backend/util/ml_engine.py path/to/telemetry.csv --lastmodel
 
 - No threshold tuning for alert policy
 - No probability calibration
-- No model registry DB integration yet
 - No temporal split strategy yet (current split is stratified random)
 - No incremental DB + Parquet sync inside this class yet
 
@@ -239,6 +238,7 @@ python backend/util/ml_engine.py path/to/telemetry.csv --lastmodel
 
 When integrating with later stages:
 - Add API endpoints that call `train/evaluate/predict`
-- Persist run metadata to model registry tables
+- Upload trained artifacts and metrics to backend via `POST /api/v1/models/upload`
+- Persist run metadata and model binary in PostgreSQL model registry tables
 - Add promotion gate checks using recall/F1 thresholds
 - Add scheduled retraining and telemetry ingestion orchestration
