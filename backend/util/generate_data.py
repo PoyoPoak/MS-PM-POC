@@ -154,7 +154,6 @@ def generate_predictive_telemetry(
             normal_data_points,
             len(patient_indices) - post_failure_buffer_points,
         )
-        fail_idx = patient_indices[fail_pos]
 
         # Define the warning window (e.g., the device degrades over 14 days)
         degradation_days = 14 * pings_per_day
