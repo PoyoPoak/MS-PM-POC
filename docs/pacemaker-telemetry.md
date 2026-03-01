@@ -114,3 +114,28 @@ uv run python util/replay_telemetry.py --interval-ms 500 --token "$TELEMETRY_ING
 cd backend
 uv run python util/replay_telemetry.py --dry-run --interval-ms 0 --verbose
 ```
+
+## Telemetry Ingestion API Contract (Demo V1)
+
+- Endpoint: `POST /api/v1/telemetry/ingest`
+- Authentication: superuser token required.
+- Request body: JSON array of telemetry rows (variable daily batch size; typical upper target ~1000 rows/day, maximum 2000 rows/request).
+
+### Required fields per row
+
+- `patient_id` (integer, >= 0)
+- `timestamp` (Unix epoch seconds, UTC)
+- `lead_impedance_ohms` (number)
+- `capture_threshold_v` (number)
+- `r_wave_sensing_mv` (number)
+- `battery_voltage_v` (number)
+
+### Optional fields per row
+
+- `target_fail_next_7d` (`0`, `1`, or `null`)
+- All engineered rolling/delta feature fields listed above.
+
+### Duplicate behavior
+
+- Rows are considered duplicates when `patient_id` and `timestamp` match.
+- Duplicates are not inserted and are reported in the response summary (`duplicate_count`, `duplicate_in_payload_count`, `duplicate_existing_count`).
