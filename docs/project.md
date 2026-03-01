@@ -129,6 +129,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
   - Trigger email alerts for high-risk predictions.
 - Incoming records are validated and appended to the dataset/store (Azure PostgreSQL database).
 - Ingestion events are auditable (timestamped run/event metadata).
+- **Labeling and Training Window Brief:** Newly ingested telemetry is treated as unlabeled at arrival time for supervised retraining purposes. The active model still performs immediate inference for risk monitoring/alerts, while `Target_Fail_Next_7d` is backfilled only after the 7-day outcome window matures (or a failure event is confirmed within that window). Retraining jobs use only matured, outcome-labeled rows and never treat model predictions as ground-truth labels.
 
 ### FR-3 Model Training
 
@@ -141,6 +142,8 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - `MLEngine` accepts configurable Random Forest hyperparameters (for example: `n_estimators`, `max_depth`, and `random_state`) through class initialization.
 - Trained model artifact is persisted with version metadata, with model serialization/deserialization implemented via `joblib`.
 - **Data Retrieval Strategy:** The local training script (`ml_engine.py`) connects directly to the Azure PostgreSQL database. To minimize data transfer and database load, it performs an incremental pull of new records based on the latest timestamp and appends them to a local Parquet cache file before loading into a pandas DataFrame for training.
+- **Delayed Supervised Retraining Rule:** At training time `T_now`, candidate models are trained only on rows whose label windows are mature (typically records with `Timestamp <= T_now - 7 days`, plus any records positively resolved earlier by confirmed failure events). This avoids self-training feedback loops from pseudo-labeling.
+- See `docs/training_loop.md` for the detailed delayed-label training lifecycle and promotion guardrails.
 
 ### FR-4 Model Evaluation
 
@@ -192,6 +195,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 
 - The platform uses a **hybrid setup** with an Azure-hosted web application and Azure DevOps orchestration, while model training/evaluation executes on a **self-hosted Azure DevOps agent running on my local PC**.
 - Azure does not directly call into the local machine; instead, Azure DevOps queues jobs and the local self-hosted agent polls and picks up training jobs.
+- Reference: `docs/training_loop.md` contains the detailed inference-vs-retraining loop and label backfill process used by scheduled/manual MLOps runs.
 
 - **Pipeline Separation**
   - `CI` validates code quality and build integrity.
@@ -215,11 +219,12 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - **Scheduled/On-Demand MLOps Job Sequence**
   1. Generate/ingest new synthetic telemetry batch.
   2. Append and validate incoming data in dataset/storage.
-  3. Train candidate model on local self-hosted agent.
-  4. Evaluate candidate model and persist metrics/run metadata.
-  5. Publish model artifact and metrics back to Azure artifact storage/registry.
-  6. Promote model to active only if promotion thresholds are met.
-  7. Refresh dashboard-facing metrics and predictions.
+  3. Backfill matured `Target_Fail_Next_7d` labels from observed/simulated outcomes.
+  4. Train candidate model on local self-hosted agent using only matured, outcome-labeled rows.
+  5. Evaluate candidate model and persist metrics/run metadata.
+  6. Publish model artifact and metrics back to Azure artifact storage/registry.
+  7. Promote model to active only if promotion thresholds are met.
+  8. Refresh dashboard-facing metrics and predictions.
 
 - **Promotion, Rollback, and Failure Handling**
   - Promotion gate compares candidate metrics to baseline thresholds (emphasis on Recall/F1 for risk detection).
