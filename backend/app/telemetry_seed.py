@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 SEED_PACEMAKER_DATA_ENV = "SEED_PACEMAKER_DATA"
 
 DEFAULT_PACEMAKER_DATA_CSV = (
-    Path(__file__).resolve().parents[1] / "util" / "data" / "pacemaker_data.csv"
+    Path(__file__).resolve().parents[1] / "util" / "data" / "pacemaker_data_seed.csv"
 )
 
 _CSV_COLUMN_MAP: dict[str, str] = {

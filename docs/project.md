@@ -116,10 +116,12 @@ The goal is **not** to create a clinically validated product. The goal is to dem
   - `capture_threshold_v_delta_per_day_3d`: Average per-day change in threshold over trailing 3 days.
   - `capture_threshold_v_delta_per_day_7d`: Average per-day change in threshold over trailing 7 days.
 - System supports continuous synthetic increments to simulate live telemetry data arrival.
+- Initial synthetic dataset is ordered by `timestamp` then `patient_id`, so all patients are represented in parallel at each telemetry interval.
 
 ### FR-2 Data Ingestion API
 
-- Backend exposes endpoint(s) to perform the following:
+- Backend can either seed the database with the initial synthetic dataset or provide an endpoint to receive data uploads.
+- Backend will exposes endpoint(s) to perform the following:
   - Receive/add new telemetry records.
   - Get information about current data, models, and metrics.
   - Trigger model training with latest data.
