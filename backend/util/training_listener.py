@@ -20,7 +20,9 @@ except ModuleNotFoundError:
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TRAINING_CSV_PATH = Path(__file__).resolve().parent / "data" / "pacemaker_data_seed.csv"
+_DEFAULT_TRAINING_CSV_PATH = (
+    Path(__file__).resolve().parent / "data" / "pacemaker_data_seed.csv"
+)
 _DEFAULT_BACKEND_UPLOAD_URL = "http://localhost:8000/api/v1/models/upload"
 _DEFAULT_TIMEOUT_SECONDS = 60.0
 
@@ -126,7 +128,9 @@ def _upload_model_artifact(
         ) from exc
 
 
-def _train_model(request: TrainJobRequest, training_csv_path: Path) -> tuple[Path, dict[str, Any]]:
+def _train_model(
+    request: TrainJobRequest, training_csv_path: Path
+) -> tuple[Path, dict[str, Any]]:
     engine = MLEngine(
         n_estimators=request.n_estimators,
         max_depth=request.max_depth,
@@ -236,8 +240,12 @@ def _parse_args() -> argparse.Namespace:
             "POST /train to trigger MLEngine training and artifact upload."
         )
     )
-    parser.add_argument("--host", default="127.0.0.1", help="Host to bind the listener.")
-    parser.add_argument("--port", type=int, default=8081, help="Port to bind the listener.")
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="Host to bind the listener."
+    )
+    parser.add_argument(
+        "--port", type=int, default=8081, help="Port to bind the listener."
+    )
     parser.add_argument(
         "--api-key",
         default=os.getenv("TRAINING_LISTENER_API_KEY"),

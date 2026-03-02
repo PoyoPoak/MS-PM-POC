@@ -133,6 +133,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - Incoming records are validated and appended to the dataset/store (Azure PostgreSQL database).
 - Primary ingest contract for the demo is a superuser-protected bulk POST endpoint (`/api/v1/telemetry/ingest`) that accepts a JSON array payload (typical daily batch up to ~1000 rows, max 2000 rows/request).
 - Primary model-upload contract for the demo is a superuser-protected POST endpoint (`/api/v1/models/upload`) that accepts `multipart/form-data` with `model_file` (binary artifact, typical ~20-30 MB) and `metadata_json` (run metadata + metrics).
+- Training-sync endpoints (`/api/v1/training/poll`, `/api/v1/training/download`, `/api/v1/training/request`) allow the local compute server to poll for pending jobs, download mature telemetry data incrementally, and let the frontend create new job requests. See [training-sync-endpoints.md](training-sync-endpoints.md).
 - Batch size is variable: smaller batches are expected when some simulated patient devices stop reporting (for example due to failure events).
 - Each row requires `patient_id`, Unix-epoch `timestamp` (seconds, UTC), `lead_impedance_ohms`, `capture_threshold_v`, `r_wave_sensing_mv`, and `battery_voltage_v`; engineered features and `target_fail_next_7d` are optional.
 - Duplicate rows (same `patient_id` + `timestamp`) are rejected and reported in the ingestion response summary.
@@ -222,17 +223,18 @@ The goal is **not** to create a clinically validated product. The goal is to dem
   - Executes smoke checks after deployment; if checks fail, deployment is marked failed and previous stable release remains active.
 
 - **Training Trigger Paths**
-  - Manual: user clicks “Train new model with latest data” in the dashboard.
+  - Manual: user clicks "Train new model with latest data" in the dashboard, which calls `POST /api/v1/training/request` to create a pending job.
   - Automated: scheduled MLOps run (every 24 hours by default).
-  - Both trigger Azure DevOps, which queues a training/evaluation job on the local self-hosted agent.
+  - Both result in a pending `TrainingJobRequest` row. The local self-hosted agent polls `GET /api/v1/training/poll` and, when `true`, fetches data via `GET /api/v1/training/download`. See [training-sync-endpoints.md](training-sync-endpoints.md).
 
 - **Scheduled/On-Demand MLOps Job Sequence**
   1. Generate/ingest new synthetic telemetry batch.
   2. Append and validate incoming data in dataset/storage.
   3. Backfill matured `Target_Fail_Next_7d` labels from observed/simulated outcomes.
-  4. Train candidate model on local self-hosted agent using only matured, outcome-labeled rows.
-  5. Evaluate candidate model and persist metrics/run metadata.
-  6. Publish model artifact and metrics to backend `POST /api/v1/models/upload`; backend persists metadata plus binary artifact to PostgreSQL (`BYTEA`).
+  4. Local agent calls `GET /api/v1/training/download?newest_local_ts=<ts>` to pull only new mature rows (see [training-sync-endpoints.md](training-sync-endpoints.md)).
+  5. Train candidate model on local self-hosted agent using only matured, outcome-labeled rows.
+  6. Evaluate candidate model and persist metrics/run metadata.
+  7. Publish model artifact and metrics to backend `POST /api/v1/models/upload`; backend persists metadata plus binary artifact to PostgreSQL (`BYTEA`).
   7. Promote model to active only if promotion thresholds are met.
   8. Refresh dashboard-facing metrics and predictions.
 

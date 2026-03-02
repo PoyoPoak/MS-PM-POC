@@ -8,6 +8,8 @@ This document describes the standalone listener used as the local compute receiv
 
 The listener runs `MLEngine` locally, saves artifacts under `backend/util/artifacts/<version_id>/`, and can upload `model.joblib` + metadata to `POST /api/v1/models/upload`.
 
+For the backend endpoints that feed data to the listener (poll for jobs, download training data, create job requests), see [training-sync-endpoints.md](training-sync-endpoints.md).
+
 ## Run the listener
 
 From repository root:

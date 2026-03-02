@@ -477,6 +477,144 @@ export const PacemakerTelemetryIngestResultSchema = {
     title: 'PacemakerTelemetryIngestResult'
 } as const;
 
+export const PacemakerTelemetryPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        patient_id: {
+            type: 'integer',
+            title: 'Patient Id'
+        },
+        timestamp: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Timestamp'
+        },
+        lead_impedance_ohms: {
+            type: 'number',
+            title: 'Lead Impedance Ohms'
+        },
+        capture_threshold_v: {
+            type: 'number',
+            title: 'Capture Threshold V'
+        },
+        r_wave_sensing_mv: {
+            type: 'number',
+            title: 'R Wave Sensing Mv'
+        },
+        battery_voltage_v: {
+            type: 'number',
+            title: 'Battery Voltage V'
+        },
+        target_fail_next_7d: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Target Fail Next 7D'
+        },
+        lead_impedance_ohms_rolling_mean_3d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lead Impedance Ohms Rolling Mean 3D'
+        },
+        lead_impedance_ohms_rolling_mean_7d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lead Impedance Ohms Rolling Mean 7D'
+        },
+        capture_threshold_v_rolling_mean_3d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Capture Threshold V Rolling Mean 3D'
+        },
+        capture_threshold_v_rolling_mean_7d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Capture Threshold V Rolling Mean 7D'
+        },
+        lead_impedance_ohms_delta_per_day_3d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lead Impedance Ohms Delta Per Day 3D'
+        },
+        lead_impedance_ohms_delta_per_day_7d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lead Impedance Ohms Delta Per Day 7D'
+        },
+        capture_threshold_v_delta_per_day_3d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Capture Threshold V Delta Per Day 3D'
+        },
+        capture_threshold_v_delta_per_day_7d: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Capture Threshold V Delta Per Day 7D'
+        }
+    },
+    type: 'object',
+    required: ['id', 'patient_id', 'timestamp', 'lead_impedance_ohms', 'capture_threshold_v', 'r_wave_sensing_mv', 'battery_voltage_v'],
+    title: 'PacemakerTelemetryPublic',
+    description: 'Single telemetry row returned by the training-data download endpoint.'
+} as const;
+
 export const PrivateUserCreateSchema = {
     properties: {
         email: {
@@ -517,6 +655,92 @@ export const TokenSchema = {
     type: 'object',
     required: ['access_token'],
     title: 'Token'
+} as const;
+
+export const TrainingDataDownloadResultSchema = {
+    properties: {
+        rows: {
+            items: {
+                '$ref': '#/components/schemas/PacemakerTelemetryPublic'
+            },
+            type: 'array',
+            title: 'Rows'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        },
+        server_newest_ts: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Server Newest Ts',
+            description: 'Unix epoch seconds of the newest telemetry row on the server.'
+        },
+        maturity_cutoff_ts: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Maturity Cutoff Ts',
+            description: 'Unix epoch seconds of the maturity boundary (server_newest_ts − 7 days). Only rows with timestamp <= this value are returned.'
+        }
+    },
+    type: 'object',
+    required: ['rows', 'count'],
+    title: 'TrainingDataDownloadResult',
+    description: 'Response envelope for GET /training/download.'
+} as const;
+
+export const TrainingJobRequestPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        is_pending: {
+            type: 'boolean',
+            title: 'Is Pending'
+        },
+        requested_by: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Requested By'
+        }
+    },
+    type: 'object',
+    required: ['id', 'is_pending'],
+    title: 'TrainingJobRequestPublic',
+    description: 'Response model when creating a training job request.'
 } as const;
 
 export const UpdatePasswordSchema = {

@@ -30,7 +30,7 @@ Trust these instructions first. Only search the codebase if information here is 
 │   │   ├── api/
 │   │   │   ├── main.py      # API router aggregation (all routes under /api/v1)
 │   │   │   ├── deps.py      # Dependency injection (auth, DB session)
-│   │   │   └── routes/      # Endpoint modules: items, users, login, utils, private
+│   │   │   └── routes/      # Endpoint modules: items, users, login, utils, private, telemetry, training, model_artifacts
 │   │   ├── alembic/         # Migration scripts (versions/ dir)
 │   │   └── email-templates/ # MJML source (src/) and built HTML (build/)
 │   ├── tests/               # pytest tests (conftest.py, api/, crud/, utils/, scripts/)

@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, ModelsUploadModelArtifactData, ModelsUploadModelArtifactResponse, PrivateCreateUserData, PrivateCreateUserResponse, TelemetryIngestTelemetryBulkData, TelemetryIngestTelemetryBulkResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, ModelsUploadModelArtifactData, ModelsUploadModelArtifactResponse, PrivateCreateUserData, PrivateCreateUserResponse, TelemetryIngestTelemetryBulkData, TelemetryIngestTelemetryBulkResponse, TrainingPollTrainingJobResponse, TrainingDownloadTrainingDataData, TrainingDownloadTrainingDataResponse, TrainingCreateTrainingJobRequestResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
 
 export class ItemsService {
     /**
@@ -281,6 +281,67 @@ export class TelemetryService {
             errors: {
                 422: 'Validation Error'
             }
+        });
+    }
+}
+
+export class TrainingService {
+    /**
+     * Poll Training Job
+     * Return ``true`` when at least one pending training-job request exists.
+     * @returns boolean Successful Response
+     * @throws ApiError
+     */
+    public static pollTrainingJob(): CancelablePromise<TrainingPollTrainingJobResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/training/poll'
+        });
+    }
+    
+    /**
+     * Download Training Data
+     * Return mature telemetry rows the local compute has not yet seen.
+     *
+     * **Boundary rules**
+     *
+     * * ``local_dt``   = ``datetime(newest_local_ts, UTC)``
+     * * ``server_max`` = ``MAX(pacemaker_telemetry.timestamp)``
+     * * ``cutoff``     = ``server_max − 7 days``
+     * * Result set:  ``timestamp > local_dt  AND  timestamp <= cutoff``
+     *
+     * If the table is empty **or** no rows satisfy the window, an empty
+     * ``rows`` list is returned with ``count = 0``.
+     * @param data The data for the request.
+     * @param data.newestLocalTs Unix epoch seconds of the newest telemetry row the local compute already has.
+     * @returns TrainingDataDownloadResult Successful Response
+     * @throws ApiError
+     */
+    public static downloadTrainingData(data: TrainingDownloadTrainingDataData): CancelablePromise<TrainingDownloadTrainingDataResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/training/download',
+            query: {
+                newest_local_ts: data.newestLocalTs
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Create Training Job Request
+     * Create a pending training-job request.
+     *
+     * Called by the frontend when a user clicks the "Request Training" button.
+     * @returns TrainingJobRequestPublic Successful Response
+     * @throws ApiError
+     */
+    public static createTrainingJobRequest(): CancelablePromise<TrainingCreateTrainingJobRequestResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/training/request'
         });
     }
 }
