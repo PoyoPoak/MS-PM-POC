@@ -134,6 +134,9 @@ For scheduled/on-demand MLOps runs in this project:
 
 This aligns with the model registry, rollback safety, and traceability goals in `project.md`.
 
+For the local receiving-end implementation used by self-hosted compute, see
+`local-training-listener.md`.
+
 ---
 
 ## 9) Anti-patterns to avoid
