@@ -132,6 +132,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
   - Trigger email alerts for high-risk predictions.
 - Incoming records are validated and appended to the dataset/store (Azure PostgreSQL database).
 - Primary ingest contract for the demo is a superuser-protected bulk POST endpoint (`/api/v1/telemetry/ingest`) that accepts a JSON array payload (typical daily batch up to ~1000 rows, max 2000 rows/request).
+- Primary model-upload contract for the demo is a superuser-protected POST endpoint (`/api/v1/models/upload`) that accepts `multipart/form-data` with `model_file` (binary artifact, typical ~20-30 MB) and `metadata_json` (run metadata + metrics).
 - Batch size is variable: smaller batches are expected when some simulated patient devices stop reporting (for example due to failure events).
 - Each row requires `patient_id`, Unix-epoch `timestamp` (seconds, UTC), `lead_impedance_ohms`, `capture_threshold_v`, `r_wave_sensing_mv`, and `battery_voltage_v`; engineered features and `target_fail_next_7d` are optional.
 - Duplicate rows (same `patient_id` + `timestamp`) are rejected and reported in the ingestion response summary.
@@ -163,11 +164,13 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 ### FR-5 Model Registry and Selection
 
 - System tracks model versions with:
-  - Version identifier (timestamp based)
+  - Server-generated UUID identifier
+  - Optional client-provided version/run identifiers for traceability
   - Training time
   - Dataset range/size
   - Evaluation metrics
   - Active/inactive status
+- Model artifact binary is stored in PostgreSQL as `BYTEA` with stored hash (`sha256`) and size metadata.
 - User can select an active model from dashboard/API.
 
 ### FR-6 Predictions and Risk Monitoring
@@ -229,7 +232,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
   3. Backfill matured `Target_Fail_Next_7d` labels from observed/simulated outcomes.
   4. Train candidate model on local self-hosted agent using only matured, outcome-labeled rows.
   5. Evaluate candidate model and persist metrics/run metadata.
-  6. Publish model artifact and metrics back to Azure artifact storage/registry.
+  6. Publish model artifact and metrics to backend `POST /api/v1/models/upload`; backend persists metadata plus binary artifact to PostgreSQL (`BYTEA`).
   7. Promote model to active only if promotion thresholds are met.
   8. Refresh dashboard-facing metrics and predictions.
 

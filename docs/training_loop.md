@@ -128,7 +128,7 @@ For scheduled/on-demand MLOps runs in this project:
 3. Backfill matured labels from synthetic outcome timeline.
 4. Train challenger on matured labeled subset.
 5. Evaluate + log metrics and run metadata.
-6. Register artifacts/metrics.
+6. Upload artifacts/metrics via `POST /api/v1/models/upload` (multipart with `model_file` + `metadata_json`) so backend persists metadata and model binary (`BYTEA`) in PostgreSQL.
 7. Promote only if thresholds pass.
 8. Refresh prediction views and model metadata.
 

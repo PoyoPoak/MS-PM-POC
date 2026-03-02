@@ -9,6 +9,11 @@ export type Body_login_login_access_token = {
     client_secret?: (string | null);
 };
 
+export type Body_models_upload_model_artifact = {
+    model_file: (Blob | File);
+    metadata_json: string;
+};
+
 export type HTTPValidationError = {
     detail?: Array<ValidationError>;
 };
@@ -38,6 +43,17 @@ export type ItemUpdate = {
 
 export type Message = {
     message: string;
+};
+
+export type ModelArtifactUploadResponse = {
+    id: string;
+    created_at?: (string | null);
+    client_version_id?: (string | null);
+    source_run_id?: (string | null);
+    algorithm: string;
+    model_size_bytes: number;
+    model_sha256: string;
+    content_type?: (string | null);
 };
 
 export type NewPassword = {
@@ -195,6 +211,12 @@ export type LoginRecoverPasswordHtmlContentData = {
 };
 
 export type LoginRecoverPasswordHtmlContentResponse = (string);
+
+export type ModelsUploadModelArtifactData = {
+    formData: Body_models_upload_model_artifact;
+};
+
+export type ModelsUploadModelArtifactResponse = (ModelArtifactUploadResponse);
 
 export type PrivateCreateUserData = {
     requestBody: PrivateUserCreate;

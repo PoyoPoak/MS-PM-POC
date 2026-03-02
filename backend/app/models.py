@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from pydantic import EmailStr
-from sqlalchemy import DateTime
+from sqlalchemy import JSON, Column, DateTime, LargeBinary
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -166,6 +167,53 @@ class PacemakerTelemetryIngestResult(SQLModel):
     duplicate_count: int
     duplicate_in_payload_count: int
     duplicate_existing_count: int
+
+
+class ModelArtifactUploadMetadata(SQLModel):
+    client_version_id: str | None = Field(default=None, max_length=255)
+    source_run_id: str | None = Field(default=None, max_length=255)
+    trained_at_utc: datetime | None = None
+    algorithm: str = Field(min_length=1, max_length=255)
+    hyperparameters: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any]
+    dataset_info: dict[str, Any] = Field(default_factory=dict)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class ModelArtifact(SQLModel, table=True):
+    __tablename__ = "model_artifact"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    client_version_id: str | None = Field(default=None, max_length=255, index=True)
+    source_run_id: str | None = Field(default=None, max_length=255, index=True)
+    trained_at_utc: datetime | None = Field(
+        default=None,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    algorithm: str = Field(min_length=1, max_length=255)
+    hyperparameters: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    metrics: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    dataset_info: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    notes: str | None = Field(default=None, max_length=2000)
+    content_type: str | None = Field(default=None, max_length=255)
+    model_size_bytes: int
+    model_sha256: str = Field(min_length=64, max_length=64, index=True)
+    model_blob: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+
+
+class ModelArtifactUploadResponse(SQLModel):
+    id: uuid.UUID
+    created_at: datetime | None = None
+    client_version_id: str | None = None
+    source_run_id: str | None = None
+    algorithm: str
+    model_size_bytes: int
+    model_sha256: str
+    content_type: str | None = None
 
 
 # Generic message

@@ -57,6 +57,23 @@ export const Body_login_login_access_tokenSchema = {
     title: 'Body_login-login_access_token'
 } as const;
 
+export const Body_models_upload_model_artifactSchema = {
+    properties: {
+        model_file: {
+            type: 'string',
+            format: 'binary',
+            title: 'Model File'
+        },
+        metadata_json: {
+            type: 'string',
+            title: 'Metadata Json'
+        }
+    },
+    type: 'object',
+    required: ['model_file', 'metadata_json'],
+    title: 'Body_models-upload_model_artifact'
+} as const;
+
 export const HTTPValidationErrorSchema = {
     properties: {
         detail: {
@@ -206,6 +223,76 @@ export const MessageSchema = {
     type: 'object',
     required: ['message'],
     title: 'Message'
+} as const;
+
+export const ModelArtifactUploadResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        client_version_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Client Version Id'
+        },
+        source_run_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Source Run Id'
+        },
+        algorithm: {
+            type: 'string',
+            title: 'Algorithm'
+        },
+        model_size_bytes: {
+            type: 'integer',
+            title: 'Model Size Bytes'
+        },
+        model_sha256: {
+            type: 'string',
+            title: 'Model Sha256'
+        },
+        content_type: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Content Type'
+        }
+    },
+    type: 'object',
+    required: ['id', 'algorithm', 'model_size_bytes', 'model_sha256'],
+    title: 'ModelArtifactUploadResponse'
 } as const;
 
 export const NewPasswordSchema = {
