@@ -735,12 +735,36 @@ export const TrainingJobRequestPublicSchema = {
                 }
             ],
             title: 'Requested By'
+        },
+        consumed_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Consumed At'
+        },
+        cancelled_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Cancelled At'
         }
     },
     type: 'object',
     required: ['id', 'is_pending'],
     title: 'TrainingJobRequestPublic',
-    description: 'Response model when creating a training job request.'
+    description: 'Response model when creating or inspecting a training job request.'
 } as const;
 
 export const UpdatePasswordSchema = {

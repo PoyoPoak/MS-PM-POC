@@ -25,6 +25,7 @@ def upgrade():
     sa.Column('is_pending', sa.Boolean(), nullable=False),
     sa.Column('requested_by', sa.Uuid(), nullable=True),
     sa.Column('consumed_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('cancelled_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['requested_by'], ['user.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )

@@ -231,15 +231,21 @@ class TrainingJobRequest(SQLModel, table=True):
         default=None,
         sa_type=DateTime(timezone=True),  # type: ignore
     )
+    cancelled_at: datetime | None = Field(
+        default=None,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
 
 
 class TrainingJobRequestPublic(SQLModel):
-    """Response model when creating a training job request."""
+    """Response model when creating or inspecting a training job request."""
 
     id: uuid.UUID
     created_at: datetime | None = None
     is_pending: bool
     requested_by: uuid.UUID | None = None
+    consumed_at: datetime | None = None
+    cancelled_at: datetime | None = None
 
 
 class ModelArtifactUploadMetadata(SQLModel):

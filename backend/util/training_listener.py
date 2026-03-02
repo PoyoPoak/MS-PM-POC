@@ -179,6 +179,37 @@ def poll(*, backend_url: str, token: str, timeout: float) -> bool:
     return result
 
 
+def claim(*, backend_url: str, token: str, timeout: float) -> dict[str, Any] | None:
+    """Claim the newest pending training job.
+
+    The backend cancels any older pending jobs automatically.
+    Returns the job dict (including ``id``) on success, or ``None`` when
+    there is no pending job (HTTP 404) or a job is already in-progress
+    (HTTP 409).
+    """
+    url = f"{backend_url}/api/v1/training/claim"
+    resp = httpx.post(url, headers=_auth_headers(token), timeout=timeout)
+    if resp.status_code in (404, 409):
+        return None
+    resp.raise_for_status()
+    result: dict[str, Any] = resp.json()
+    return result
+
+
+def complete(
+    *,
+    backend_url: str,
+    token: str,
+    job_id: str,
+    timeout: float,
+) -> None:
+    """Mark a claimed training job as complete."""
+    url = f"{backend_url}/api/v1/training/{job_id}/complete"
+    resp = httpx.post(url, headers=_auth_headers(token), timeout=timeout)
+    resp.raise_for_status()
+    logger.info("Marked job %s as complete.", job_id)
+
+
 def download(
     *,
     backend_url: str,
@@ -253,7 +284,11 @@ def run_loop(
     poll_interval: int,
     timeout: float,
 ) -> None:  # pragma: no cover — long-running loop
-    """Poll → download → train → upload, repeating indefinitely."""
+    """Poll → claim → download → train → upload → complete, repeating indefinitely.
+
+    Only one job runs at a time.  Claiming the newest pending job
+    automatically cancels any older pending jobs on the backend.
+    """
     logger.info(
         "Worker started. backend=%s  csv=%s  interval=%ds",
         backend_url,
@@ -269,7 +304,20 @@ def run_loop(
                 time.sleep(poll_interval)
                 continue
 
-            logger.info("Pending job detected — downloading data …")
+            # Claim the newest pending job (older ones are cancelled)
+            job = claim(backend_url=backend_url, token=token, timeout=timeout)
+            if job is None:
+                logger.debug(
+                    "Could not claim (no pending or already in-progress). "
+                    "Sleeping %ds …",
+                    poll_interval,
+                )
+                time.sleep(poll_interval)
+                continue
+
+            job_id: str = job["id"]
+            logger.info("Claimed job %s — downloading data …", job_id)
+
             newest_ts = _newest_local_ts(csv_path)
             data = download(
                 backend_url=backend_url,
@@ -288,6 +336,14 @@ def run_loop(
                 csv_path=csv_path,
                 backend_url=backend_url,
                 token=token,
+                timeout=timeout,
+            )
+
+            # Mark the job as complete
+            complete(
+                backend_url=backend_url,
+                token=token,
+                job_id=job_id,
                 timeout=timeout,
             )
 

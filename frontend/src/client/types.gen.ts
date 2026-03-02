@@ -141,13 +141,15 @@ export type TrainingDataDownloadResult = {
 };
 
 /**
- * Response model when creating a training job request.
+ * Response model when creating or inspecting a training job request.
  */
 export type TrainingJobRequestPublic = {
     id: string;
     created_at?: (string | null);
     is_pending: boolean;
     requested_by?: (string | null);
+    consumed_at?: (string | null);
+    cancelled_at?: (string | null);
 };
 
 export type UpdatePassword = {
@@ -290,6 +292,14 @@ export type TrainingDownloadTrainingDataData = {
 export type TrainingDownloadTrainingDataResponse = (TrainingDataDownloadResult);
 
 export type TrainingCreateTrainingJobRequestResponse = (TrainingJobRequestPublic);
+
+export type TrainingClaimTrainingJobResponse = (TrainingJobRequestPublic);
+
+export type TrainingCompleteTrainingJobData = {
+    jobId: string;
+};
+
+export type TrainingCompleteTrainingJobResponse = (TrainingJobRequestPublic);
 
 export type UsersReadUsersData = {
     limit?: number;

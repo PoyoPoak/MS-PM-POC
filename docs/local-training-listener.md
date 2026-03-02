@@ -17,17 +17,22 @@ For the backend endpoints the worker calls (poll, download, request), see [train
 │  1. Poll for jobs ─────────┼──GET─┼→ /api/v1/training/poll       │
 │     (every 5 seconds)      │      │   returns true / false       │
 │                            │      │                              │
-│  2. Download data ─────────┼──GET─┼→ /api/v1/training/download   │
-│     newest_local_ts=<ts>   │      │   ?newest_local_ts=...       │
-│                            │      │   returns telemetry rows     │
+│  2. Claim newest job ──────┼─POST─┼→ /api/v1/training/claim      │
+│     (cancels older ones)   │      │   returns job or 404/409     │
 │                            │      │                              │
-│  3. Append to local CSV    │      │                              │
+│  3. Download data ─────────┼──GET─┼→ /api/v1/training/download   │
+│     newest_local_ts=<ts>   │      │   returns telemetry rows     │
+│                            │      │                              │
+│  4. Append to local CSV    │      │                              │
 │     Train model (MLEngine) │      │                              │
 │                            │      │                              │
-│  4. Upload artifact ───────┼─POST─┼→ /api/v1/models/upload       │
+│  5. Upload artifact ───────┼─POST─┼→ /api/v1/models/upload       │
 │                            │      │   (multipart model + meta)   │
 │                            │      │                              │
-│  5. Resume polling ────────┼──────┼→ back to step 1              │
+│  6. Mark complete ─────────┼─POST─┼→ /api/v1/training/{id}/      │
+│                            │      │   complete                   │
+│                            │      │                              │
+│  7. Resume polling ────────┼──────┼→ back to step 1              │
 └────────────────────────────┘      └──────────────────────────────┘
 ```
 
@@ -131,6 +136,73 @@ The worker catches and logs all errors without crashing:
 | Training failure | Logged; resumes polling |
 
 The worker always returns to polling after an error, making it resilient for long-running unattended operation.
+
+## Manual Testing
+
+You can manually drive the job lifecycle with `curl` to verify each step without running the full worker.
+
+### 1. Get a superuser token
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/login/access-token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin@example.com&password=changethis" | python -m json.tool | grep access_token | cut -d'"' -f4)
+```
+
+### 2. Create a pending training job
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/training/request \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+```
+
+### 3. Poll (should return `true`)
+
+```bash
+curl -s http://localhost:8000/api/v1/training/poll \
+  -H "Authorization: Bearer $TOKEN"
+# → true
+```
+
+### 4. Claim the newest pending job
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/training/claim \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+# → returns the claimed job with is_pending=false; note the "id" field
+```
+
+### 5. Complete the job
+
+```bash
+JOB_ID="<paste-id-from-step-4>"
+curl -s -X POST "http://localhost:8000/api/v1/training/$JOB_ID/complete" \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+# → returns the job with consumed_at set
+```
+
+### Edge cases to try
+
+```bash
+# Claim with no pending jobs → 404
+curl -s -X POST http://localhost:8000/api/v1/training/claim \
+  -H "Authorization: Bearer $TOKEN"
+
+# Create two jobs, then claim — the older one gets cancelled
+curl -s -X POST http://localhost:8000/api/v1/training/request \
+  -H "Authorization: Bearer $TOKEN" > /dev/null
+curl -s -X POST http://localhost:8000/api/v1/training/request \
+  -H "Authorization: Bearer $TOKEN" > /dev/null
+curl -s -X POST http://localhost:8000/api/v1/training/claim \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+
+# Claim again while one is in-progress → 409
+curl -s -X POST http://localhost:8000/api/v1/training/request \
+  -H "Authorization: Bearer $TOKEN" > /dev/null
+curl -s -X POST http://localhost:8000/api/v1/training/claim \
+  -H "Authorization: Bearer $TOKEN"
+# → {"detail": "A training job is already in progress."}
+```
 
 ## Stopping the Worker
 

@@ -1,6 +1,6 @@
 # Training Sync Endpoints
 
-Backend routes that let the local compute server (or any authorized client) check for pending training jobs, download mature telemetry data, and create new job requests.
+Backend routes that let the local compute server (or any authorized client) check for pending training jobs, download mature telemetry data, manage job lifecycle (claim/complete), and create new job requests.
 
 - **Route module:** [backend/app/api/routes/training.py](../backend/app/api/routes/training.py)
 - **Table model:** `TrainingJobRequest` in [backend/app/models.py](../backend/app/models.py)
@@ -183,15 +183,156 @@ curl -s -X POST "http://localhost:8000/api/v1/training/request" \
 
 ---
 
+### 4. `POST /api/v1/training/claim`
+
+Atomically claim the **newest** pending training-job request. Any older pending jobs are cancelled. Only one job may be in-progress at a time.
+
+#### Request
+
+| Part | Detail |
+|---|---|
+| **Method** | `POST` |
+| **Path** | `/api/v1/training/claim` |
+| **Auth** | Bearer superuser token |
+| **Body** | _none_ |
+
+#### Behaviour
+
+1. **In-progress guard** — if any job is already claimed but not yet completed or cancelled, returns `409`.
+2. Fetches all pending jobs newest-first (`ORDER BY created_at DESC`).
+3. Claims the first (newest) — sets `is_pending = false`.
+4. Cancels all older pending jobs — sets `is_pending = false`, `cancelled_at = now()`.
+5. Returns the claimed job.
+
+#### Response Schema — `TrainingJobRequestPublic`
+
+```json
+{
+  "id": "a1b2c3d4-...",
+  "created_at": "2026-03-01T12:00:00Z",
+  "is_pending": false,
+  "requested_by": "user-uuid-...",
+  "consumed_at": null,
+  "cancelled_at": null
+}
+```
+
+#### Error Responses
+
+| Status | Condition |
+|---|---|
+| `404 Not Found` | No pending training jobs |
+| `409 Conflict` | A training job is already in progress (claimed, not completed/cancelled) |
+
+#### Example
+
+```bash
+# Claim the newest pending job
+curl -s -X POST "http://localhost:8000/api/v1/training/claim" \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+```
+
+---
+
+### 5. `POST /api/v1/training/{job_id}/complete`
+
+Mark a claimed training-job request as complete. Sets `consumed_at` to now-UTC.
+
+#### Request
+
+| Part | Detail |
+|---|---|
+| **Method** | `POST` |
+| **Path** | `/api/v1/training/{job_id}/complete` |
+| **Auth** | Bearer superuser token |
+| **Path param** | `job_id` — UUID of the claimed job |
+| **Body** | _none_ |
+
+#### Response Schema — `TrainingJobRequestPublic`
+
+```json
+{
+  "id": "a1b2c3d4-...",
+  "created_at": "2026-03-01T12:00:00Z",
+  "is_pending": false,
+  "requested_by": "user-uuid-...",
+  "consumed_at": "2026-03-01T12:05:00Z",
+  "cancelled_at": null
+}
+```
+
+#### Error Responses
+
+| Status | Condition |
+|---|---|
+| `404 Not Found` | Job ID does not exist |
+| `409 Conflict` | Job has not been claimed yet (still pending) |
+| `409 Conflict` | Job has already been completed |
+| `409 Conflict` | Job was cancelled |
+
+#### Example
+
+```bash
+# Complete a claimed job (use the job ID from the claim response)
+curl -s -X POST "http://localhost:8000/api/v1/training/a1b2c3d4-.../complete" \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+```
+
+---
+
+## Job Lifecycle
+
+A training job transitions through these states:
+
+```
+                              ┌──────────┐
+  POST /request ─────────────→│ pending  │
+                              └────┬─────┘
+                                   │
+                        POST /claim│
+                     ┌─────────────┼─────────────┐
+                     │             │              │
+                     ▼             ▼              │
+              ┌───────────┐ ┌───────────┐         │
+              │ cancelled │ │  claimed  │         │
+              │           │ │(in-prog.) │         │
+              └───────────┘ └─────┬─────┘         │
+                                  │               │
+                   POST /{id}/    │               │
+                   complete       │               │
+                                  ▼               │
+                           ┌───────────┐          │
+                           │ completed │          │
+                           └───────────┘          │
+```
+
+**Rules:**
+- Only one job may be in the **claimed** state at a time.
+- Claiming always picks the **newest** pending job.
+- All older pending jobs are automatically **cancelled**.
+- The listener must complete (or the backend must receive a complete call for) the current job before another can be claimed.
+
+---
+
 ## Database Table: `training_job_request`
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | UUID | Primary key, auto-generated |
 | `created_at` | `timestamptz` | Auto-set on creation |
-| `is_pending` | `boolean` | `true` until consumed; indexed for fast polling |
+| `is_pending` | `boolean` | `true` until claimed or cancelled; indexed for fast polling |
 | `requested_by` | UUID (FK → `user.id`) | Nullable, ON DELETE SET NULL |
-| `consumed_at` | `timestamptz` | Set when the local compute marks the job consumed |
+| `consumed_at` | `timestamptz` | Set when the local compute marks the job complete |
+| `cancelled_at` | `timestamptz` | Set when the job is cancelled (e.g., superseded by a newer job) |
+
+### State Matrix
+
+| State | `is_pending` | `consumed_at` | `cancelled_at` |
+|---|---|---|---|
+| **Pending** | `true` | `null` | `null` |
+| **Claimed** (in-progress) | `false` | `null` | `null` |
+| **Completed** | `false` | set | `null` |
+| **Cancelled** | `false` | `null` | set |
 
 ---
 
@@ -240,15 +381,22 @@ curl -s "http://localhost:8000/api/v1/training/poll" \
   -H "Authorization: Bearer $TOKEN"
 # → true
 
-# Step 4 — Download mature telemetry data (first sync)
+# Step 4 — Claim the newest pending job
+curl -s -X POST "http://localhost:8000/api/v1/training/claim" \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+# → returns the claimed job with is_pending=false, note the "id" field
+
+# Step 5 — Download mature telemetry data (first sync)
 curl -s "http://localhost:8000/api/v1/training/download?newest_local_ts=0" \
   -H "Authorization: Bearer $TOKEN" | python -m json.tool
 
-# Step 5 — Download incremental data
-# Use the server_newest_ts from the previous response minus 7 days,
-# or the timestamp of your local newest row:
-curl -s "http://localhost:8000/api/v1/training/download?newest_local_ts=1740096000" \
+# Step 6 — (train and upload model locally)
+
+# Step 7 — Mark the job as complete (use the id from step 4)
+JOB_ID="<paste-job-id-from-step-4>"
+curl -s -X POST "http://localhost:8000/api/v1/training/$JOB_ID/complete" \
   -H "Authorization: Bearer $TOKEN" | python -m json.tool
+# → returns the job with consumed_at set
 ```
 
 ### Auth Error Cases
@@ -281,15 +429,20 @@ The [training_listener.py](../backend/util/training_listener.py) script is the s
 │  1. Poll for jobs ─────────┼──GET─┼→ /api/v1/training/poll       │
 │     (on a timer / cron)    │      │   returns true/false         │
 │                            │      │                              │
-│  2. Download data ─────────┼──GET─┼→ /api/v1/training/download   │
-│     newest_local_ts=<ts>   │      │   ?newest_local_ts=...       │
-│                            │      │   returns telemetry rows     │
+│  2. Claim newest job ──────┼─POST─┼→ /api/v1/training/claim      │
+│     (cancels older ones)   │      │   returns claimed job or 409 │
 │                            │      │                              │
-│  3. Train model locally    │      │                              │
+│  3. Download data ─────────┼──GET─┼→ /api/v1/training/download   │
+│     newest_local_ts=<ts>   │      │   returns telemetry rows     │
+│                            │      │                              │
+│  4. Train model locally    │      │                              │
 │     (MLEngine)             │      │                              │
 │                            │      │                              │
-│  4. Upload artifact ───────┼─POST─┼→ /api/v1/models/upload       │
+│  5. Upload artifact ───────┼─POST─┼→ /api/v1/models/upload       │
 │                            │      │   (multipart model + meta)   │
+│                            │      │                              │
+│  6. Mark complete ─────────┼─POST─┼→ /api/v1/training/{id}/      │
+│                            │      │   complete                   │
 └────────────────────────────┘      └──────────────────────────────┘
 ```
 
@@ -297,11 +450,15 @@ The [training_listener.py](../backend/util/training_listener.py) script is the s
 
 1. **Poll on a schedule** — add a loop or cron job that calls `GET /api/v1/training/poll` every _N_ minutes. When it returns `true`, proceed to step 2.
 
-2. **Download training data** — call `GET /api/v1/training/download?newest_local_ts=<ts>` where `<ts>` is the Unix epoch seconds of the newest row in your local data cache. On first run, use `0`. Save the returned rows to your local data store (CSV, Parquet, or DataFrame).
+2. **Claim the newest job** — call `POST /api/v1/training/claim`. This atomically claims the newest pending job and cancels any older pending ones. If `409` is returned, a job is already in-progress — wait and retry later. If `404`, no pending jobs exist.
 
-3. **Train** — invoke `MLEngine.train()` with the updated local dataset, exactly as the existing `POST /train` handler in `training_listener.py` does today.
+3. **Download training data** — call `GET /api/v1/training/download?newest_local_ts=<ts>` where `<ts>` is the Unix epoch seconds of the newest row in your local data cache. On first run, use `0`. Save the returned rows to your local data store (CSV, Parquet, or DataFrame).
 
-4. **Upload** — post the resulting `model.joblib` + metadata to `POST /api/v1/models/upload` (see [model-upload-endpoint.md](model-upload-endpoint.md)).
+4. **Train** — invoke `MLEngine.train()` with the updated local dataset.
+
+5. **Upload** — post the resulting `model.joblib` + metadata to `POST /api/v1/models/upload` (see [model-upload-endpoint.md](model-upload-endpoint.md)).
+
+6. **Mark complete** — call `POST /api/v1/training/{job_id}/complete` with the job ID returned from the claim step. This sets `consumed_at` and frees the system for a new claim.
 
 ### Example: Minimal Python Polling Loop
 
@@ -321,21 +478,34 @@ while True:
     # 1. Poll
     poll = httpx.get(f"{BACKEND_BASE}/training/poll", headers=HEADERS)
     if poll.json() is True:
-        # 2. Download
-        resp = httpx.get(
-            f"{BACKEND_BASE}/training/download",
-            headers=HEADERS,
-            params={"newest_local_ts": local_newest_ts},
-        )
-        data = resp.json()
-        if data["count"] > 0:
-            rows = data["rows"]
-            # → append rows to local CSV or Parquet
-            # → update local_newest_ts to max timestamp in rows
-            local_newest_ts = data["maturity_cutoff_ts"]
+        # 2. Claim the newest pending job
+        claim = httpx.post(f"{BACKEND_BASE}/training/claim", headers=HEADERS)
+        if claim.status_code == 200:
+            job = claim.json()
+            job_id = job["id"]
 
-            # 3. Train (call existing listener /train or invoke MLEngine)
-            # 4. Upload artifact to /api/v1/models/upload
+            # 3. Download
+            resp = httpx.get(
+                f"{BACKEND_BASE}/training/download",
+                headers=HEADERS,
+                params={"newest_local_ts": local_newest_ts},
+            )
+            data = resp.json()
+            if data["count"] > 0:
+                rows = data["rows"]
+                # → append rows to local CSV or Parquet
+                # → update local_newest_ts to max timestamp in rows
+                local_newest_ts = data["maturity_cutoff_ts"]
+
+                # 4. Train (invoke MLEngine)
+                # 5. Upload artifact to /api/v1/models/upload
+
+            # 6. Mark job complete
+            httpx.post(
+                f"{BACKEND_BASE}/training/{job_id}/complete",
+                headers=HEADERS,
+            )
+        # 409 = job already in progress, 404 = no pending — just wait
 
     time.sleep(POLL_INTERVAL_SECONDS)
 ```

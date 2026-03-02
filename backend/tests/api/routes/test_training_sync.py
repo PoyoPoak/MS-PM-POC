@@ -1,5 +1,13 @@
-"""Tests for GET /training/poll, GET /training/download, POST /training/request."""
+"""Tests for training-sync endpoints.
 
+* ``GET  /training/poll``
+* ``GET  /training/download``
+* ``POST /training/request``
+* ``POST /training/claim``
+* ``POST /training/{job_id}/complete``
+"""
+
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
@@ -11,6 +19,11 @@ from app.models import PacemakerTelemetry, TrainingJobRequest
 _URL_POLL = f"{settings.API_V1_STR}/training/poll"
 _URL_DOWNLOAD = f"{settings.API_V1_STR}/training/download"
 _URL_REQUEST = f"{settings.API_V1_STR}/training/request"
+_URL_CLAIM = f"{settings.API_V1_STR}/training/claim"
+
+
+def _url_complete(job_id: uuid.UUID | str) -> str:
+    return f"{settings.API_V1_STR}/training/{job_id}/complete"
 
 
 def _cleanup(db: Session) -> None:
@@ -332,3 +345,263 @@ def test_download_response_contains_all_telemetry_fields(
     assert data["target_fail_next_7d"] == 1
     assert data["lead_impedance_ohms_rolling_mean_3d"] == 505.0
     assert data["capture_threshold_v_delta_per_day_7d"] == 0.01
+
+
+# ── Claim endpoint ────────────────────────────────────────────────
+
+
+def test_claim_returns_newest_pending_job(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    """Claim should return the newest pending job, not the oldest."""
+    _cleanup(db)
+
+    now = datetime.now(tz=timezone.utc)
+    old_job = TrainingJobRequest(is_pending=True, created_at=now - timedelta(hours=2))
+    new_job = TrainingJobRequest(is_pending=True, created_at=now)
+    db.add(old_job)
+    db.add(new_job)
+    db.commit()
+    db.refresh(new_job)
+
+    r = client.post(_URL_CLAIM, headers=superuser_token_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == str(new_job.id)
+    assert body["is_pending"] is False
+
+
+def test_claim_cancels_older_pending_jobs(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    """Older pending jobs must be cancelled when the newest is claimed."""
+    _cleanup(db)
+
+    now = datetime.now(tz=timezone.utc)
+    old_job = TrainingJobRequest(is_pending=True, created_at=now - timedelta(hours=2))
+    mid_job = TrainingJobRequest(is_pending=True, created_at=now - timedelta(hours=1))
+    new_job = TrainingJobRequest(is_pending=True, created_at=now)
+    db.add_all([old_job, mid_job, new_job])
+    db.commit()
+    db.refresh(old_job)
+    db.refresh(mid_job)
+
+    r = client.post(_URL_CLAIM, headers=superuser_token_headers)
+    assert r.status_code == 200
+
+    # Refresh stale ORM instances
+    db.refresh(old_job)
+    db.refresh(mid_job)
+
+    # Both older jobs should be cancelled
+    assert old_job.is_pending is False
+    assert old_job.cancelled_at is not None
+    assert mid_job.is_pending is False
+    assert mid_job.cancelled_at is not None
+
+
+def test_claim_returns_404_when_no_pending(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _cleanup(db)
+    r = client.post(_URL_CLAIM, headers=superuser_token_headers)
+    assert r.status_code == 404
+    assert "No pending" in r.json()["detail"]
+
+
+def test_claim_returns_409_when_job_already_in_progress(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    """If a job is claimed but not yet completed, a new claim must fail."""
+    _cleanup(db)
+
+    # Create a job that is already in-progress (claimed, not completed)
+    in_progress = TrainingJobRequest(
+        is_pending=False, consumed_at=None, cancelled_at=None
+    )
+    # And a new pending one
+    pending = TrainingJobRequest(is_pending=True)
+    db.add_all([in_progress, pending])
+    db.commit()
+
+    r = client.post(_URL_CLAIM, headers=superuser_token_headers)
+    assert r.status_code == 409
+    assert "already in progress" in r.json()["detail"]
+
+
+def test_claim_succeeds_when_previous_completed(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    """A completed job should not block a new claim."""
+    _cleanup(db)
+
+    now = datetime.now(tz=timezone.utc)
+    completed = TrainingJobRequest(
+        is_pending=False, consumed_at=now - timedelta(hours=1)
+    )
+    pending = TrainingJobRequest(is_pending=True, created_at=now)
+    db.add_all([completed, pending])
+    db.commit()
+
+    r = client.post(_URL_CLAIM, headers=superuser_token_headers)
+    assert r.status_code == 200
+
+
+def test_claim_succeeds_when_previous_cancelled(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    """A cancelled job should not block a new claim."""
+    _cleanup(db)
+
+    now = datetime.now(tz=timezone.utc)
+    cancelled = TrainingJobRequest(
+        is_pending=False, cancelled_at=now - timedelta(hours=1)
+    )
+    pending = TrainingJobRequest(is_pending=True, created_at=now)
+    db.add_all([cancelled, pending])
+    db.commit()
+
+    r = client.post(_URL_CLAIM, headers=superuser_token_headers)
+    assert r.status_code == 200
+
+
+def test_claim_response_includes_cancelled_at_field(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _cleanup(db)
+    db.add(TrainingJobRequest(is_pending=True))
+    db.commit()
+
+    r = client.post(_URL_CLAIM, headers=superuser_token_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert "cancelled_at" in body
+    assert body["cancelled_at"] is None
+
+
+def test_claim_unauthenticated(client: TestClient) -> None:
+    r = client.post(_URL_CLAIM)
+    assert r.status_code == 401
+
+
+def test_claim_not_enough_permissions(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+) -> None:
+    r = client.post(_URL_CLAIM, headers=normal_user_token_headers)
+    assert r.status_code == 403
+
+
+# ── Complete endpoint ─────────────────────────────────────────────
+
+
+def test_complete_marks_claimed_job_done(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _cleanup(db)
+
+    job = TrainingJobRequest(is_pending=False, consumed_at=None, cancelled_at=None)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    r = client.post(_url_complete(job.id), headers=superuser_token_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["consumed_at"] is not None
+    assert body["is_pending"] is False
+
+
+def test_complete_returns_404_for_nonexistent_job(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _cleanup(db)
+    fake_id = uuid.uuid4()
+    r = client.post(_url_complete(fake_id), headers=superuser_token_headers)
+    assert r.status_code == 404
+
+
+def test_complete_returns_409_for_pending_job(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _cleanup(db)
+
+    job = TrainingJobRequest(is_pending=True)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    r = client.post(_url_complete(job.id), headers=superuser_token_headers)
+    assert r.status_code == 409
+    assert "not been claimed" in r.json()["detail"]
+
+
+def test_complete_returns_409_for_already_completed_job(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _cleanup(db)
+
+    now = datetime.now(tz=timezone.utc)
+    job = TrainingJobRequest(is_pending=False, consumed_at=now)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    r = client.post(_url_complete(job.id), headers=superuser_token_headers)
+    assert r.status_code == 409
+    assert "already been completed" in r.json()["detail"]
+
+
+def test_complete_returns_409_for_cancelled_job(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _cleanup(db)
+
+    now = datetime.now(tz=timezone.utc)
+    job = TrainingJobRequest(is_pending=False, cancelled_at=now)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    r = client.post(_url_complete(job.id), headers=superuser_token_headers)
+    assert r.status_code == 409
+    assert "cancelled" in r.json()["detail"]
+
+
+def test_complete_unauthenticated(client: TestClient) -> None:
+    fake_id = uuid.uuid4()
+    r = client.post(_url_complete(fake_id))
+    assert r.status_code == 401
+
+
+def test_complete_not_enough_permissions(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+) -> None:
+    fake_id = uuid.uuid4()
+    r = client.post(_url_complete(fake_id), headers=normal_user_token_headers)
+    assert r.status_code == 403
