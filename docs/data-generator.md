@@ -54,7 +54,7 @@ Computed per patient (time-ordered):
 
 - Returns a pandas DataFrame.
 - Optionally writes CSV under `backend/util/data/` when `save_csv=True` and a relative filename is used.
-- Default filename: `pacemaker_data_seed.csv`.
+- Default filename: `pacemaker_data.csv`.
 
 ## Example
 
@@ -66,7 +66,7 @@ df = generate_predictive_telemetry(
     pings_per_day=1,
     num_days=1825,
     failure_rate=0.2,
-    filename="pacemaker_data_seed.csv",
+  filename="pacemaker_data.csv",
     save_csv=True,
 )
 ```

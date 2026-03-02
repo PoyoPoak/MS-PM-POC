@@ -98,12 +98,20 @@ uv run python backend/util/training_listener.py
 
 The worker calls `GET /api/v1/training/poll` every `--poll-interval` seconds.
 
-- Returns `true` → a pending training job exists; proceed to download.
+- Returns `true` → a pending training job exists; proceed to claim.
 - Returns `false` → sleep and poll again.
+
+### Claiming
+
+When polling returns `true`, the worker calls `POST /api/v1/training/claim`.
+
+- The newest pending job is claimed.
+- Older pending jobs are cancelled automatically.
+- If another job is already in progress, claim returns `409` and the worker resumes polling.
 
 ### Downloading
 
-When a job is pending, the worker calls `GET /api/v1/training/download?newest_local_ts=<ts>` where `<ts>` is the Unix epoch of the newest row in the local CSV (or `0` on first run).
+After a successful claim, the worker calls `GET /api/v1/training/download?newest_local_ts=<ts>` where `<ts>` is the Unix epoch of the newest row in the local CSV (or `0` on first run).
 
 The backend applies a 7-day maturity window and returns only rows with `timestamp > local_ts AND timestamp <= server_max - 7d`.
 

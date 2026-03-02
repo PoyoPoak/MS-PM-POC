@@ -133,7 +133,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - Incoming records are validated and appended to the dataset/store (Azure PostgreSQL database).
 - Primary ingest contract for the demo is a superuser-protected bulk POST endpoint (`/api/v1/telemetry/ingest`) that accepts a JSON array payload (typical daily batch up to ~1000 rows, max 2000 rows/request).
 - Primary model-upload contract for the demo is a superuser-protected POST endpoint (`/api/v1/models/upload`) that accepts `multipart/form-data` with `model_file` (binary artifact, typical ~20-30 MB) and `metadata_json` (run metadata + metrics).
-- Training-sync endpoints (`/api/v1/training/poll`, `/api/v1/training/download`, `/api/v1/training/request`) allow the local compute server to poll for pending jobs, download mature telemetry data incrementally, and let the frontend create new job requests. See [training-sync-endpoints.md](training-sync-endpoints.md).
+- Training-sync endpoints (`/api/v1/training/poll`, `/api/v1/training/download`, `/api/v1/training/request`, `/api/v1/training/claim`, `/api/v1/training/{job_id}/complete`) allow the frontend to request jobs and the local compute worker to claim, execute, and complete jobs safely. See [training-sync-endpoints.md](training-sync-endpoints.md).
 - Batch size is variable: smaller batches are expected when some simulated patient devices stop reporting (for example due to failure events).
 - Each row requires `patient_id`, Unix-epoch `timestamp` (seconds, UTC), `lead_impedance_ohms`, `capture_threshold_v`, `r_wave_sensing_mv`, and `battery_voltage_v`; engineered features and `target_fail_next_7d` are optional.
 - Duplicate rows (same `patient_id` + `timestamp`) are rejected and reported in the ingestion response summary.
@@ -150,7 +150,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - `MLEngine` includes a data preparation step that isolates feature/target columns, drops non-predictive columns, and removes rows with missing values produced by rolling-window features.
 - `MLEngine` accepts configurable Random Forest hyperparameters (for example: `n_estimators`, `max_depth`, and `random_state`) through class initialization.
 - Trained model artifact is persisted with version metadata, with model serialization/deserialization implemented via `joblib`.
-- **Data Retrieval Strategy:** The local training script (`ml_engine.py`) connects directly to the Azure PostgreSQL database. To minimize data transfer and database load, it performs an incremental pull of new records based on the latest timestamp and appends them to a local Parquet cache file before loading into a pandas DataFrame for training.
+- **Data Retrieval Strategy:** The local compute worker uses backend sync endpoints (`/training/poll`, `/training/claim`, `/training/download`, `/training/{job_id}/complete`) to process training jobs and incrementally download only mature telemetry rows. It appends rows to a local training cache file before invoking `MLEngine`.
 - **Delayed Supervised Retraining Rule:** At training time `T_now`, candidate models are trained only on rows whose label windows are mature (typically records with `Timestamp <= T_now - 7 days`, plus any records positively resolved earlier by confirmed failure events). This avoids self-training feedback loops from pseudo-labeling.
 - See `docs/training_loop.md` for the detailed delayed-label training lifecycle and promotion guardrails.
 
@@ -225,18 +225,20 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - **Training Trigger Paths**
   - Manual: user clicks "Train new model with latest data" in the dashboard, which calls `POST /api/v1/training/request` to create a pending job.
   - Automated: scheduled MLOps run (every 24 hours by default).
-  - Both result in a pending `TrainingJobRequest` row. The local self-hosted agent polls `GET /api/v1/training/poll` and, when `true`, fetches data via `GET /api/v1/training/download`. See [training-sync-endpoints.md](training-sync-endpoints.md).
+  - Both result in a pending `TrainingJobRequest` row. The local self-hosted agent polls `GET /api/v1/training/poll`, claims the newest job via `POST /api/v1/training/claim`, downloads data via `GET /api/v1/training/download`, and marks completion via `POST /api/v1/training/{job_id}/complete`. See [training-sync-endpoints.md](training-sync-endpoints.md).
 
 - **Scheduled/On-Demand MLOps Job Sequence**
   1. Generate/ingest new synthetic telemetry batch.
   2. Append and validate incoming data in dataset/storage.
   3. Backfill matured `Target_Fail_Next_7d` labels from observed/simulated outcomes.
-  4. Local agent calls `GET /api/v1/training/download?newest_local_ts=<ts>` to pull only new mature rows (see [training-sync-endpoints.md](training-sync-endpoints.md)).
-  5. Train candidate model on local self-hosted agent using only matured, outcome-labeled rows.
-  6. Evaluate candidate model and persist metrics/run metadata.
-  7. Publish model artifact and metrics to backend `POST /api/v1/models/upload`; backend persists metadata plus binary artifact to PostgreSQL (`BYTEA`).
-  7. Promote model to active only if promotion thresholds are met.
-  8. Refresh dashboard-facing metrics and predictions.
+  4. Local agent polls and claims the newest pending job.
+  5. Local agent calls `GET /api/v1/training/download?newest_local_ts=<ts>` to pull only new mature rows (see [training-sync-endpoints.md](training-sync-endpoints.md)).
+  6. Train candidate model on local self-hosted agent using only matured, outcome-labeled rows.
+  7. Evaluate candidate model and persist metrics/run metadata.
+  8. Publish model artifact and metrics to backend `POST /api/v1/models/upload`; backend persists metadata plus binary artifact to PostgreSQL (`BYTEA`).
+  9. Mark the claimed job complete via `POST /api/v1/training/{job_id}/complete`.
+  10. Promote model to active only if promotion thresholds are met.
+  11. Refresh dashboard-facing metrics and predictions.
 
 - **Promotion, Rollback, and Failure Handling**
   - Promotion gate compares candidate metrics to baseline thresholds (emphasis on Recall/F1 for risk detection).
@@ -314,7 +316,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 2. Data stored in Azure PostgreSQL and made available for training/prediction.
 3. Training is requested by UI action or schedule, which triggers Azure DevOps pipeline run.
 4. Azure DevOps queues the training job to the local self-hosted agent.
-5. Local agent performs an incremental pull of new telemetry data from PostgreSQL, updates its local Parquet cache, trains/evaluates the model, and publishes artifacts/metrics back to Azure.
+5. Local agent polls for pending jobs, claims the newest job, downloads mature rows via `GET /api/v1/training/download`, updates its local training cache, trains/evaluates the model, uploads artifacts/metrics, and marks the job complete.
 6. Candidate model is registered; active model is updated only if promotion gates pass.
 7. Predictions refresh dashboard risk views using the active model.
 8. High-risk predictions trigger email alert.
@@ -342,7 +344,7 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 
 - Generate/ingest new synthetic batch
 - Queue training/evaluation job on local self-hosted Azure DevOps agent
-- **Data Sync:** Local agent performs an incremental pull of new telemetry data from Azure PostgreSQL and updates its local Parquet cache.
+- **Data Sync:** Local agent performs endpoint-driven incremental sync of mature telemetry rows and updates its local training cache.
 - Retrain model on latest dataset (local PC compute)
 - Evaluate and log metrics
 - Publish/register versioned artifact back to Azure artifact storage/registry
@@ -411,8 +413,8 @@ To maximize interview impact, the hosted application should support this narrati
 - **Risk:** Demo dependency failures (email service, hosting, pipeline trigger timing).
   - **Mitigation:** Add smoke checks, mock fallback mode, and pre-demo health checklist.
 
-- **Risk:** High database egress costs and slow training times due to large data transfers (2M+ rows).
-  - **Mitigation:** Implement an incremental pull strategy and local Parquet caching on the self-hosted agent to only fetch new rows.
+- **Risk:** High transfer costs and slow training times due to large data movement (2M+ rows).
+  - **Mitigation:** Keep sync incremental via `/api/v1/training/download` maturity filtering and local cache appends so only newly eligible rows are transferred.
 
 ---
 

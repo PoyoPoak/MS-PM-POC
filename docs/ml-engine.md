@@ -179,7 +179,7 @@ artifact_dir = engine.save_artifact()
 from backend.util.ml_engine import MLEngine
 
 engine = MLEngine()
-engine.train("backend/util/data/pacemaker_data_seed.csv")
+engine.train("backend/util/data/pacemaker_data.csv")
 metrics = engine.evaluate()
 ```
 
