@@ -1,9 +1,9 @@
 # Training Sync Endpoints
 
-Backend routes that let the local compute server (or any authorized client) check for pending training jobs, download mature telemetry data, manage job lifecycle (claim/complete), and create new job requests.
+Backend routes that let the local compute server (or any authorized client) check for pending training jobs, download mature telemetry data, manage job lifecycle (claim/complete), create new job requests, and refresh latest-patient inference snapshots.
 
 - **Route module:** [backend/app/api/routes/training.py](../backend/app/api/routes/training.py)
-- **Table model:** `TrainingJobRequest` in [backend/app/models.py](../backend/app/models.py)
+- **Table models:** `TrainingJobRequest` and `PatientLatestTelemetry` in [backend/app/models.py](../backend/app/models.py)
 - **Auth:** all endpoints require a **superuser JWT** (`Authorization: Bearer <TOKEN>`)
 
 Related docs:
@@ -234,7 +234,62 @@ curl -s -X POST "http://localhost:8000/api/v1/training/claim" \
 
 ---
 
-### 5. `POST /api/v1/training/{job_id}/complete`
+### 5. `POST /api/v1/training/predict`
+
+Refresh the dashboard snapshot table by selecting the newest telemetry row per patient, upserting one row per `patient_id`, and (when a model exists) scoring fail probabilities using the newest uploaded model artifact.
+
+#### Behavior Summary
+
+1. Select newest telemetry row per `patient_id`.
+2. Upsert those rows into `patient_latest_telemetry` (one row per patient).
+3. Load newest model artifact (`model_artifact.created_at DESC`) and score fail probability.
+4. Update `patient_latest_telemetry.fail_probability`.
+5. If no model exists, return `404` with a summary payload in `detail` **after** snapshot upsert.
+
+#### Request
+
+| Part | Detail |
+|---|---|
+| **Method** | `POST` |
+| **Path** | `/api/v1/training/predict` |
+| **Auth** | Bearer superuser token |
+| **Body** | _none_ |
+
+#### Success Response Schema — `TrainingPredictSummary`
+
+```json
+{
+  "rows_upserted": 1000,
+  "rows_scored": 1000,
+  "model_id": "5dd3e277-5b86-4423-8cc3-0e476fb0bf0c",
+  "queued_job_id": null
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `rows_upserted` | `int` | Number of patient snapshot rows created/updated from newest telemetry |
+| `rows_scored` | `int` | Number of rows scored with model inference |
+| `model_id` | `uuid \| null` | Newest model artifact ID used for inference |
+| `queued_job_id` | `uuid \| null` | Reserved for compatibility; currently always `null` |
+
+#### Error Responses
+
+| Status | Condition |
+|---|---|
+| `404 Not Found` | No model artifact exists; snapshot upsert still runs |
+| `422 Unprocessable Entity` | Snapshot rows contain missing model feature values |
+
+#### Example
+
+```bash
+curl -s -X POST "http://localhost:8000/api/v1/training/predict" \
+  -H "Authorization: Bearer <TOKEN>" | python -m json.tool
+```
+
+---
+
+### 6. `POST /api/v1/training/{job_id}/complete`
 
 Mark a claimed training-job request as complete. Sets `consumed_at` to now-UTC.
 
@@ -399,6 +454,76 @@ curl -s -X POST "http://localhost:8000/api/v1/training/$JOB_ID/complete" \
 # → returns the job with consumed_at set
 ```
 
+### Predict Snapshot Smoke Test (`POST /training/predict`)
+
+This verifies the end-to-end snapshot + inference behavior used by the dashboard patient table.
+
+#### Preconditions
+
+- Backend API and DB are running.
+- Telemetry has been ingested (at least one row per patient you want scored).
+
+#### A) No-model path (expected `404` with upsert summary)
+
+If there are currently no rows in `model_artifact`, `/training/predict` should still upsert snapshot rows and then return `404`.
+
+```bash
+curl -s -X POST "http://localhost:8000/api/v1/training/predict" \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+```
+
+Expected shape:
+
+```json
+{
+  "detail": {
+    "message": "No model artifacts available for inference.",
+    "rows_upserted": 1000,
+    "rows_scored": 0,
+    "model_id": null,
+    "queued_job_id": null
+  }
+}
+```
+
+#### B) Upload a model artifact
+
+Upload any valid trained model artifact via [model-upload-endpoint.md](model-upload-endpoint.md) (for example using the documented `curl` with `model_file` + `metadata_json`).
+
+#### C) Happy path (expected `200` with scored rows)
+
+Call `/training/predict` again after a model exists:
+
+```bash
+curl -s -X POST "http://localhost:8000/api/v1/training/predict" \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+```
+
+Expected shape:
+
+```json
+{
+  "rows_upserted": 1000,
+  "rows_scored": 1000,
+  "model_id": "<uuid>",
+  "queued_job_id": null
+}
+```
+
+#### D) Optional DB verification (PostgreSQL)
+
+```bash
+docker compose exec db psql -U postgres -d app -c "SELECT COUNT(*) AS snapshot_rows FROM patient_latest_telemetry;"
+docker compose exec db psql -U postgres -d app -c "SELECT COUNT(*) AS null_probs FROM patient_latest_telemetry WHERE fail_probability IS NULL;"
+docker compose exec db psql -U postgres -d app -c "SELECT patient_id, timestamp, fail_probability FROM patient_latest_telemetry ORDER BY patient_id LIMIT 5;"
+```
+
+Expected checks:
+
+- `snapshot_rows` matches number of distinct patients with telemetry (target demo: ~1000).
+- After successful scoring path, `null_probs` should be `0`.
+- Returned rows should show newest timestamps per patient and populated `fail_probability`.
+
 ### Auth Error Cases
 
 ```bash
@@ -522,7 +647,7 @@ while True:
 
 ## Error Responses
 
-All three endpoints share the same auth error behavior:
+All training endpoints share the same auth error behavior:
 
 | Status | Condition |
 |---|---|

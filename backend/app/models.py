@@ -190,6 +190,43 @@ class PacemakerTelemetryPublic(SQLModel):
     capture_threshold_v_delta_per_day_7d: float | None = None
 
 
+class PatientLatestTelemetryBase(SQLModel):
+    patient_id: int = Field(primary_key=True)
+    timestamp: datetime = Field(
+        sa_type=DateTime(timezone=True),  # type: ignore
+        index=True,
+    )
+    lead_impedance_ohms: float
+    capture_threshold_v: float
+    r_wave_sensing_mv: float
+    battery_voltage_v: float
+    lead_impedance_ohms_rolling_mean_3d: float | None = Field(default=None)
+    lead_impedance_ohms_rolling_mean_7d: float | None = Field(default=None)
+    capture_threshold_v_rolling_mean_3d: float | None = Field(default=None)
+    capture_threshold_v_rolling_mean_7d: float | None = Field(default=None)
+    lead_impedance_ohms_delta_per_day_3d: float | None = Field(default=None)
+    lead_impedance_ohms_delta_per_day_7d: float | None = Field(default=None)
+    capture_threshold_v_delta_per_day_3d: float | None = Field(default=None)
+    capture_threshold_v_delta_per_day_7d: float | None = Field(default=None)
+    fail_probability: float | None = Field(default=None)
+
+
+class PatientLatestTelemetry(PatientLatestTelemetryBase, table=True):
+    __tablename__ = "patient_latest_telemetry"
+
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+
+
+class TrainingPredictSummary(SQLModel):
+    rows_upserted: int
+    rows_scored: int
+    model_id: uuid.UUID | None = None
+    queued_job_id: uuid.UUID | None = None
+
+
 class TrainingDataDownloadResult(SQLModel):
     """Response envelope for GET /training/download."""
 

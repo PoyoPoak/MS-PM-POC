@@ -152,6 +152,13 @@ export type TrainingJobRequestPublic = {
     cancelled_at?: (string | null);
 };
 
+export type TrainingPredictSummary = {
+    rows_upserted: number;
+    rows_scored: number;
+    model_id?: (string | null);
+    queued_job_id?: (string | null);
+};
+
 export type UpdatePassword = {
     current_password: string;
     new_password: string;
@@ -292,6 +299,8 @@ export type TrainingDownloadTrainingDataData = {
 export type TrainingDownloadTrainingDataResponse = (TrainingDataDownloadResult);
 
 export type TrainingCreateTrainingJobRequestResponse = (TrainingJobRequestPublic);
+
+export type TrainingRefreshPatientLatestPredictionsResponse = (TrainingPredictSummary);
 
 export type TrainingClaimTrainingJobResponse = (TrainingJobRequestPublic);
 
