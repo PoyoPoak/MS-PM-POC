@@ -1,80 +1,130 @@
+"""
+training_listener.py
+====================
+Polling-based local compute worker for pacemaker model training.
+
+Flow
+----
+1. **Poll** ``GET /api/v1/training/poll`` every *N* seconds.
+2. If ``true``, **download** new data via
+   ``GET /api/v1/training/download?newest_local_ts=<ts>``.
+3. Append rows to a local CSV cache, **train** the model with
+   ``MLEngine``, then **upload** the artifact + metrics via
+   ``POST /api/v1/models/upload``.
+4. Resume polling.
+
+All backend communication uses a superuser JWT
+(``Authorization: Bearer <TOKEN>``).
+"""
+
 from __future__ import annotations
 
 import argparse
 import json
 import logging
 import os
-from dataclasses import dataclass
+import sys
+import time
 from pathlib import Path
 from typing import Any
 
 import httpx
-import uvicorn
-from fastapi import FastAPI, Header, HTTPException, status
-from pydantic import BaseModel, Field
+import pandas as pd
 
 try:
     from backend.util.ml_engine import MLEngine
 except ModuleNotFoundError:
     from ml_engine import MLEngine
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("training_listener")
 
-_DEFAULT_TRAINING_CSV_PATH = (
-    Path(__file__).resolve().parent / "data" / "pacemaker_data_seed.csv"
-)
-_DEFAULT_BACKEND_UPLOAD_URL = "http://localhost:8000/api/v1/models/upload"
-_DEFAULT_TIMEOUT_SECONDS = 60.0
+# ---------------------------------------------------------------------------
+# Defaults
+# ---------------------------------------------------------------------------
+_DEFAULT_BACKEND_URL = "http://localhost:8000"
+_DEFAULT_POLL_INTERVAL_SECONDS = 5
+_DEFAULT_TIMEOUT_SECONDS = 120.0
+_DEFAULT_CSV_PATH = Path(__file__).resolve().parent / "data" / "local_training_data.csv"
+_MIN_ROWS_FOR_TRAINING = 10
 
+# ---------------------------------------------------------------------------
+# Field mapping: PacemakerTelemetryPublic JSON key → CSV column header
+# ---------------------------------------------------------------------------
+_FIELD_TO_CSV: dict[str, str] = {
+    "patient_id": "Patient_ID",
+    "timestamp": "Timestamp",
+    "lead_impedance_ohms": "Lead_Impedance_Ohms",
+    "capture_threshold_v": "Capture_Threshold_V",
+    "r_wave_sensing_mv": "R_Wave_Sensing_mV",
+    "battery_voltage_v": "Battery_Voltage_V",
+    "target_fail_next_7d": "Target_Fail_Next_7d",
+    "lead_impedance_ohms_rolling_mean_3d": "Lead_Impedance_Ohms_RollingMean_3d",
+    "lead_impedance_ohms_rolling_mean_7d": "Lead_Impedance_Ohms_RollingMean_7d",
+    "capture_threshold_v_rolling_mean_3d": "Capture_Threshold_V_RollingMean_3d",
+    "capture_threshold_v_rolling_mean_7d": "Capture_Threshold_V_RollingMean_7d",
+    "lead_impedance_ohms_delta_per_day_3d": "Lead_Impedance_Ohms_DeltaPerDay_3d",
+    "lead_impedance_ohms_delta_per_day_7d": "Lead_Impedance_Ohms_DeltaPerDay_7d",
+    "capture_threshold_v_delta_per_day_3d": "Capture_Threshold_V_DeltaPerDay_3d",
+    "capture_threshold_v_delta_per_day_7d": "Capture_Threshold_V_DeltaPerDay_7d",
+}
 
-@dataclass
-class ListenerSettings:
-    api_key: str | None
-    backend_upload_url: str
-    request_timeout_seconds: float
-
-
-class TrainJobRequest(BaseModel):
-    training_csv_path: str = str(_DEFAULT_TRAINING_CSV_PATH)
-    artifact_version_id: str | None = Field(default=None, max_length=255)
-    client_version_id: str | None = Field(default=None, max_length=255)
-    source_run_id: str | None = Field(default=None, max_length=255)
-    notes: str | None = Field(default=None, max_length=2000)
-    upload_to_backend: bool = True
-    backend_upload_url: str | None = None
-    backend_token: str | None = None
-
-    n_estimators: int = Field(default=100, ge=1)
-    max_depth: int | None = Field(default=20, ge=1)
-    random_state: int = 42
-    n_folds: int = Field(default=5, ge=2)
-    test_size: float = Field(default=0.2, gt=0, lt=1)
-
-
-class TrainJobResponse(BaseModel):
-    status: str
-    artifact_dir: str
-    model_path: str
-    metrics: dict[str, Any]
-    upload_response: dict[str, Any] | None = None
+# The CSV columns in canonical order (matches pacemaker_data_seed.csv).
+_CSV_COLUMNS: list[str] = list(_FIELD_TO_CSV.values())
 
 
-def _resolve_training_csv_path(path_value: str) -> Path:
-    path = Path(path_value).expanduser()
-    if not path.is_absolute():
-        path = Path.cwd() / path
-    return path.resolve()
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _auth_headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _newest_local_ts(csv_path: Path) -> int:
+    """Return the newest ``Timestamp`` epoch-seconds from the local CSV.
+
+    Returns ``0`` when the file is missing, empty, or has no data rows.
+    """
+    if not csv_path.exists():
+        return 0
+    try:
+        df = pd.read_csv(csv_path, usecols=["Timestamp"])
+    except (pd.errors.EmptyDataError, ValueError):
+        return 0
+    if df.empty:
+        return 0
+    # Timestamp stored as ISO string in CSV — parse then convert.
+    ts_series = pd.to_datetime(df["Timestamp"], utc=True)
+    return int(ts_series.max().timestamp())
+
+
+def _rows_to_dataframe(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    """Convert JSON rows from ``/training/download`` into a CSV-shaped DataFrame."""
+    records: list[dict[str, Any]] = []
+    for row in rows:
+        record: dict[str, Any] = {}
+        for json_key, csv_col in _FIELD_TO_CSV.items():
+            record[csv_col] = row.get(json_key)
+        records.append(record)
+    return pd.DataFrame(records, columns=_CSV_COLUMNS)
+
+
+def _append_to_csv(df: pd.DataFrame, csv_path: Path) -> None:
+    """Append rows to the local CSV cache, creating the file if needed."""
+    write_header = not csv_path.exists() or csv_path.stat().st_size == 0
+    df.to_csv(csv_path, mode="a", header=write_header, index=False)
+    logger.info("Appended %d rows to %s", len(df), csv_path)
 
 
 def _build_metadata_payload(
-    request: TrainJobRequest,
     metrics: dict[str, Any],
     *,
-    fallback_version_id: str,
+    artifact_dir_name: str,
 ) -> dict[str, Any]:
+    """Build the ``metadata_json`` dict for the upload endpoint."""
     return {
-        "client_version_id": request.client_version_id or fallback_version_id,
-        "source_run_id": request.source_run_id,
+        "client_version_id": artifact_dir_name,
         "algorithm": "RandomForestClassifier",
         "hyperparameters": metrics.get("hyperparameters", {}),
         "metrics": {
@@ -86,205 +136,248 @@ def _build_metadata_payload(
             "kfold_cv_scores": metrics.get("kfold_cv_scores"),
         },
         "dataset_info": metrics.get("dataset_info", {}),
-        "notes": request.notes,
+        "notes": "Automated training via polling worker",
     }
 
 
-def _upload_model_artifact(
+def _upload_artifact(
     *,
     upload_url: str,
     token: str,
     model_path: Path,
     metadata_payload: dict[str, Any],
-    timeout_seconds: float,
+    timeout: float,
 ) -> dict[str, Any]:
-    headers = {"Authorization": f"Bearer {token}"}
-
-    with model_path.open("rb") as model_file:
+    """POST the model binary + metadata to the backend upload endpoint."""
+    with model_path.open("rb") as f:
         files = {
-            "model_file": (
-                model_path.name,
-                model_file,
-                "application/octet-stream",
-            )
+            "model_file": (model_path.name, f, "application/octet-stream"),
         }
         data = {"metadata_json": json.dumps(metadata_payload)}
-        response = httpx.post(
+        resp = httpx.post(
             upload_url,
-            headers=headers,
+            headers=_auth_headers(token),
             files=files,
             data=data,
-            timeout=timeout_seconds,
+            timeout=timeout,
         )
-
-    response.raise_for_status()
-
-    try:
-        return response.json()
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Backend upload endpoint returned a non-JSON response.",
-        ) from exc
+    resp.raise_for_status()
+    return resp.json()
 
 
-def _train_model(
-    request: TrainJobRequest, training_csv_path: Path
-) -> tuple[Path, dict[str, Any]]:
-    engine = MLEngine(
-        n_estimators=request.n_estimators,
-        max_depth=request.max_depth,
-        random_state=request.random_state,
-        n_folds=request.n_folds,
-        test_size=request.test_size,
+# ---------------------------------------------------------------------------
+# Core loop actions
+# ---------------------------------------------------------------------------
+
+
+def poll(*, backend_url: str, token: str, timeout: float) -> bool:
+    """Check whether the backend has a pending training job."""
+    url = f"{backend_url}/api/v1/training/poll"
+    resp = httpx.get(url, headers=_auth_headers(token), timeout=timeout)
+    resp.raise_for_status()
+    result: bool = resp.json() is True
+    return result
+
+
+def download(
+    *,
+    backend_url: str,
+    token: str,
+    newest_ts: int,
+    timeout: float,
+) -> dict[str, Any]:
+    """Download mature telemetry rows newer than *newest_ts*."""
+    url = f"{backend_url}/api/v1/training/download"
+    resp = httpx.get(
+        url,
+        headers=_auth_headers(token),
+        params={"newest_local_ts": newest_ts},
+        timeout=timeout,
     )
-    engine.train(training_csv_path)
+    resp.raise_for_status()
+    result: dict[str, Any] = resp.json()
+    return result
+
+
+def train_and_upload(
+    *,
+    csv_path: Path,
+    backend_url: str,
+    token: str,
+    timeout: float,
+) -> None:
+    """Train a model on the local CSV and upload the artifact to the backend."""
+    row_count = sum(1 for _ in csv_path.open()) - 1  # minus header
+    if row_count < _MIN_ROWS_FOR_TRAINING:
+        logger.warning(
+            "Only %d data rows in %s (minimum %d). Skipping training.",
+            row_count,
+            csv_path,
+            _MIN_ROWS_FOR_TRAINING,
+        )
+        return
+
+    logger.info("Starting training on %s (%d rows)…", csv_path, row_count)
+
+    engine = MLEngine(n_estimators=200, max_depth=20)
+    engine.train(csv_path)
     metrics = engine.evaluate()
-    artifact_dir = engine.save_artifact(version_id=request.artifact_version_id)
-    return artifact_dir, metrics
+    artifact_dir = engine.save_artifact()
+
+    model_path = artifact_dir / "model.joblib"
+    metadata = _build_metadata_payload(metrics, artifact_dir_name=artifact_dir.name)
+
+    upload_url = f"{backend_url}/api/v1/models/upload"
+    logger.info("Uploading artifact %s to %s …", model_path, upload_url)
+
+    result = _upload_artifact(
+        upload_url=upload_url,
+        token=token,
+        model_path=model_path,
+        metadata_payload=metadata,
+        timeout=timeout,
+    )
+    logger.info("Upload complete. id=%s", result.get("id"))
 
 
-def create_app(settings: ListenerSettings) -> FastAPI:
-    app = FastAPI(title="Pacemaker Local Training Listener", version="0.1.0")
+# ---------------------------------------------------------------------------
+# Main loop
+# ---------------------------------------------------------------------------
 
-    @app.get("/health")
-    def health_check() -> dict[str, str]:
-        return {"status": "ok"}
 
-    @app.post("/train", response_model=TrainJobResponse)
-    def run_training_job(
-        request: TrainJobRequest,
-        x_listener_key: str | None = Header(default=None),
-    ) -> TrainJobResponse:
-        if settings.api_key and x_listener_key != settings.api_key:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or missing X-Listener-Key.",
-            )
+def run_loop(
+    *,
+    backend_url: str,
+    token: str,
+    csv_path: Path,
+    poll_interval: int,
+    timeout: float,
+) -> None:  # pragma: no cover — long-running loop
+    """Poll → download → train → upload, repeating indefinitely."""
+    logger.info(
+        "Worker started. backend=%s  csv=%s  interval=%ds",
+        backend_url,
+        csv_path,
+        poll_interval,
+    )
 
-        training_csv_path = _resolve_training_csv_path(request.training_csv_path)
-        if not training_csv_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Training CSV not found: {training_csv_path}",
-            )
-
+    while True:
         try:
-            artifact_dir, metrics = _train_model(request, training_csv_path)
-        except Exception as exc:
-            logger.exception("Training job failed.")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Training failed: {exc}",
-            ) from exc
+            has_job = poll(backend_url=backend_url, token=token, timeout=timeout)
+            if not has_job:
+                logger.debug("No pending job. Sleeping %ds …", poll_interval)
+                time.sleep(poll_interval)
+                continue
 
-        model_path = artifact_dir / "model.joblib"
-        metadata_payload = _build_metadata_payload(
-            request,
-            metrics,
-            fallback_version_id=artifact_dir.name,
-        )
+            logger.info("Pending job detected — downloading data …")
+            newest_ts = _newest_local_ts(csv_path)
+            data = download(
+                backend_url=backend_url,
+                token=token,
+                newest_ts=newest_ts,
+                timeout=timeout,
+            )
 
-        upload_response: dict[str, Any] | None = None
-        if request.upload_to_backend:
-            token = request.backend_token or os.getenv("BACKEND_SUPERUSER_TOKEN")
-            if not token:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=(
-                        "backend_token is required when upload_to_backend=true "
-                        "(or set BACKEND_SUPERUSER_TOKEN)."
-                    ),
-                )
+            if data["count"] > 0:
+                df = _rows_to_dataframe(data["rows"])
+                _append_to_csv(df, csv_path)
+            else:
+                logger.info("Download returned 0 new rows.")
 
-            upload_url = request.backend_upload_url or settings.backend_upload_url
-            try:
-                upload_response = _upload_model_artifact(
-                    upload_url=upload_url,
-                    token=token,
-                    model_path=model_path,
-                    metadata_payload=metadata_payload,
-                    timeout_seconds=settings.request_timeout_seconds,
-                )
-            except httpx.HTTPStatusError as exc:
-                backend_status = exc.response.status_code
-                backend_detail = exc.response.text
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=(
-                        "Backend upload failed with status "
-                        f"{backend_status}: {backend_detail}"
-                    ),
-                ) from exc
-            except httpx.HTTPError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Backend upload request failed: {exc}",
-                ) from exc
+            train_and_upload(
+                csv_path=csv_path,
+                backend_url=backend_url,
+                token=token,
+                timeout=timeout,
+            )
 
-        return TrainJobResponse(
-            status="completed",
-            artifact_dir=str(artifact_dir),
-            model_path=str(model_path),
-            metrics=metrics,
-            upload_response=upload_response,
-        )
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "HTTP %d from %s: %s",
+                exc.response.status_code,
+                exc.request.url,
+                exc.response.text[:300],
+            )
+        except httpx.HTTPError as exc:
+            logger.error("HTTP error: %s", exc)
+        except Exception:
+            logger.exception("Unexpected error in polling loop")
 
-    return app
+        time.sleep(poll_interval)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run the local training listener service. "
-            "POST /train to trigger MLEngine training and artifact upload."
-        )
+            "Polling worker that checks the backend for pending training "
+            "jobs, downloads new telemetry data, trains a model with "
+            "MLEngine, and uploads the artifact back to the backend."
+        ),
     )
     parser.add_argument(
-        "--host", default="127.0.0.1", help="Host to bind the listener."
+        "--backend-url",
+        default=os.getenv("BACKEND_URL", _DEFAULT_BACKEND_URL),
+        help="Base URL of the backend API (default: %(default)s).",
     )
     parser.add_argument(
-        "--port", type=int, default=8081, help="Port to bind the listener."
+        "--token",
+        default=os.getenv("BACKEND_SUPERUSER_TOKEN"),
+        help="Superuser JWT for backend auth (or set BACKEND_SUPERUSER_TOKEN).",
     )
     parser.add_argument(
-        "--api-key",
-        default=os.getenv("TRAINING_LISTENER_API_KEY"),
-        help="Optional shared key expected in X-Listener-Key.",
+        "--csv",
+        type=Path,
+        default=Path(os.getenv("LOCAL_TRAINING_CSV", str(_DEFAULT_CSV_PATH))),
+        help="Path to the local training-data CSV cache.",
     )
     parser.add_argument(
-        "--backend-upload-url",
-        default=os.getenv("BACKEND_MODEL_UPLOAD_URL", _DEFAULT_BACKEND_UPLOAD_URL),
-        help="Default backend model upload endpoint.",
+        "--poll-interval",
+        type=int,
+        default=int(
+            os.getenv("POLL_INTERVAL_SECONDS", str(_DEFAULT_POLL_INTERVAL_SECONDS))
+        ),
+        help="Seconds between poll requests (default: %(default)s).",
     )
     parser.add_argument(
-        "--timeout-seconds",
+        "--timeout",
         type=float,
         default=_DEFAULT_TIMEOUT_SECONDS,
-        help="Timeout for backend upload requests.",
+        help="HTTP request timeout in seconds (default: %(default)s).",
     )
     parser.add_argument(
         "--log-level",
         default="info",
         choices=["critical", "error", "warning", "info", "debug"],
-        help="Listener log verbosity.",
+        help="Log verbosity (default: %(default)s).",
     )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    settings = ListenerSettings(
-        api_key=args.api_key,
-        backend_upload_url=args.backend_upload_url,
-        request_timeout_seconds=args.timeout_seconds,
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper()),
+        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
     )
 
-    app = create_app(settings)
-    uvicorn.run(
-        app,
-        host=args.host,
-        port=args.port,
-        log_level=args.log_level,
+    if not args.token:
+        logger.error(
+            "No superuser token provided. Use --token or set BACKEND_SUPERUSER_TOKEN."
+        )
+        sys.exit(1)
+
+    run_loop(
+        backend_url=args.backend_url.rstrip("/"),
+        token=args.token,
+        csv_path=args.csv,
+        poll_interval=args.poll_interval,
+        timeout=args.timeout,
     )
 
 
