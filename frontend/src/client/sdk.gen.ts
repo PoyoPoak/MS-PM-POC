@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, ModelsUploadModelArtifactData, ModelsUploadModelArtifactResponse, PrivateCreateUserData, PrivateCreateUserResponse, TelemetryIngestTelemetryBulkData, TelemetryIngestTelemetryBulkResponse, TrainingPollTrainingJobResponse, TrainingDownloadTrainingDataData, TrainingDownloadTrainingDataResponse, TrainingCreateTrainingJobRequestResponse, TrainingClaimTrainingJobResponse, TrainingCompleteTrainingJobData, TrainingCompleteTrainingJobResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, ModelsUploadModelArtifactData, ModelsUploadModelArtifactResponse, PrivateCreateUserData, PrivateCreateUserResponse, TelemetryIngestTelemetryBulkData, TelemetryIngestTelemetryBulkResponse, TrainingPollTrainingJobResponse, TrainingDownloadTrainingDataData, TrainingDownloadTrainingDataResponse, TrainingCreateTrainingJobRequestResponse, TrainingRefreshPatientLatestPredictionsResponse, TrainingClaimTrainingJobResponse, TrainingCompleteTrainingJobData, TrainingCompleteTrainingJobResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
 
 export class ItemsService {
     /**
@@ -342,6 +342,19 @@ export class TrainingService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/training/request'
+        });
+    }
+    
+    /**
+     * Refresh Patient Latest Predictions
+     * Refresh latest-per-patient telemetry snapshot and fail probabilities.
+     * @returns TrainingPredictSummary Successful Response
+     * @throws ApiError
+     */
+    public static refreshPatientLatestPredictions(): CancelablePromise<TrainingRefreshPatientLatestPredictionsResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/training/predict'
         });
     }
     

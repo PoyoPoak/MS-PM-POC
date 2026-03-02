@@ -767,6 +767,46 @@ export const TrainingJobRequestPublicSchema = {
     description: 'Response model when creating or inspecting a training job request.'
 } as const;
 
+export const TrainingPredictSummarySchema = {
+    properties: {
+        rows_upserted: {
+            type: 'integer',
+            title: 'Rows Upserted'
+        },
+        rows_scored: {
+            type: 'integer',
+            title: 'Rows Scored'
+        },
+        model_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Model Id'
+        },
+        queued_job_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Queued Job Id'
+        }
+    },
+    type: 'object',
+    required: ['rows_upserted', 'rows_scored'],
+    title: 'TrainingPredictSummary'
+} as const;
+
 export const UpdatePasswordSchema = {
     properties: {
         current_password: {
