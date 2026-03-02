@@ -6,6 +6,7 @@ from app.api.routes import (
     model_artifacts,
     private,
     telemetry,
+    training,
     users,
     utils,
 )
@@ -18,6 +19,7 @@ api_router.include_router(utils.router)
 api_router.include_router(items.router)
 api_router.include_router(telemetry.router)
 api_router.include_router(model_artifacts.router)
+api_router.include_router(training.router)
 
 
 if settings.ENVIRONMENT == "local":

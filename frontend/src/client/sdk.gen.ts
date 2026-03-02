@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, ModelsUploadModelArtifactData, ModelsUploadModelArtifactResponse, PrivateCreateUserData, PrivateCreateUserResponse, TelemetryIngestTelemetryBulkData, TelemetryIngestTelemetryBulkResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, ModelsUploadModelArtifactData, ModelsUploadModelArtifactResponse, PrivateCreateUserData, PrivateCreateUserResponse, TelemetryIngestTelemetryBulkData, TelemetryIngestTelemetryBulkResponse, TrainingPollTrainingJobResponse, TrainingDownloadTrainingDataData, TrainingDownloadTrainingDataResponse, TrainingCreateTrainingJobRequestResponse, TrainingClaimTrainingJobResponse, TrainingCompleteTrainingJobData, TrainingCompleteTrainingJobResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
 
 export class ItemsService {
     /**
@@ -278,6 +278,111 @@ export class TelemetryService {
             url: '/api/v1/telemetry/ingest',
             body: data.requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class TrainingService {
+    /**
+     * Poll Training Job
+     * Return ``true`` when at least one pending training-job request exists.
+     * @returns boolean Successful Response
+     * @throws ApiError
+     */
+    public static pollTrainingJob(): CancelablePromise<TrainingPollTrainingJobResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/training/poll'
+        });
+    }
+    
+    /**
+     * Download Training Data
+     * Return mature telemetry rows the local compute has not yet seen.
+     *
+     * **Boundary rules**
+     *
+     * * ``local_dt``   = ``datetime(newest_local_ts, UTC)``
+     * * ``server_max`` = ``MAX(pacemaker_telemetry.timestamp)``
+     * * ``cutoff``     = ``server_max − 7 days``
+     * * Result set:  ``timestamp > local_dt  AND  timestamp <= cutoff``
+     *
+     * If the table is empty **or** no rows satisfy the window, an empty
+     * ``rows`` list is returned with ``count = 0``.
+     * @param data The data for the request.
+     * @param data.newestLocalTs Unix epoch seconds of the newest telemetry row the local compute already has.
+     * @returns TrainingDataDownloadResult Successful Response
+     * @throws ApiError
+     */
+    public static downloadTrainingData(data: TrainingDownloadTrainingDataData): CancelablePromise<TrainingDownloadTrainingDataResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/training/download',
+            query: {
+                newest_local_ts: data.newestLocalTs
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Create Training Job Request
+     * Create a pending training-job request.
+     *
+     * Called by the frontend when a user clicks the "Request Training" button.
+     * @returns TrainingJobRequestPublic Successful Response
+     * @throws ApiError
+     */
+    public static createTrainingJobRequest(): CancelablePromise<TrainingCreateTrainingJobRequestResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/training/request'
+        });
+    }
+    
+    /**
+     * Claim Training Job
+     * Atomically claim the **newest** pending training-job request.
+     *
+     * * Any *older* pending jobs are cancelled (``cancelled_at`` set to
+     * now-UTC, ``is_pending`` set to ``False``).
+     * * Returns **404** when no pending job exists.
+     * * Returns **409** when a job is already in-progress (claimed but
+     * not yet completed/cancelled).  Only one job may run at a time.
+     * @returns TrainingJobRequestPublic Successful Response
+     * @throws ApiError
+     */
+    public static claimTrainingJob(): CancelablePromise<TrainingClaimTrainingJobResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/training/claim'
+        });
+    }
+    
+    /**
+     * Complete Training Job
+     * Mark a claimed training-job request as complete.
+     *
+     * Sets ``consumed_at`` to now-UTC.  Returns **404** when the job does
+     * not exist and **409** when the job is still pending (not yet claimed)
+     * or has already been completed.
+     * @param data The data for the request.
+     * @param data.jobId
+     * @returns TrainingJobRequestPublic Successful Response
+     * @throws ApiError
+     */
+    public static completeTrainingJob(data: TrainingCompleteTrainingJobData): CancelablePromise<TrainingCompleteTrainingJobResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/training/{job_id}/complete',
+            path: {
+                job_id: data.jobId
+            },
             errors: {
                 422: 'Validation Error'
             }

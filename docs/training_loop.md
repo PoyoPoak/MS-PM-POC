@@ -134,6 +134,12 @@ For scheduled/on-demand MLOps runs in this project:
 
 This aligns with the model registry, rollback safety, and traceability goals in `project.md`.
 
+For the local receiving-end implementation used by self-hosted compute, see
+[local-training-listener.md](local-training-listener.md).
+
+For the backend sync endpoints that the local compute uses to poll for jobs and
+download mature training data, see [training-sync-endpoints.md](training-sync-endpoints.md).
+
 ---
 
 ## 9) Anti-patterns to avoid

@@ -169,6 +169,85 @@ class PacemakerTelemetryIngestResult(SQLModel):
     duplicate_existing_count: int
 
 
+class PacemakerTelemetryPublic(SQLModel):
+    """Single telemetry row returned by the training-data download endpoint."""
+
+    id: uuid.UUID
+    patient_id: int
+    timestamp: datetime
+    lead_impedance_ohms: float
+    capture_threshold_v: float
+    r_wave_sensing_mv: float
+    battery_voltage_v: float
+    target_fail_next_7d: int | None = None
+    lead_impedance_ohms_rolling_mean_3d: float | None = None
+    lead_impedance_ohms_rolling_mean_7d: float | None = None
+    capture_threshold_v_rolling_mean_3d: float | None = None
+    capture_threshold_v_rolling_mean_7d: float | None = None
+    lead_impedance_ohms_delta_per_day_3d: float | None = None
+    lead_impedance_ohms_delta_per_day_7d: float | None = None
+    capture_threshold_v_delta_per_day_3d: float | None = None
+    capture_threshold_v_delta_per_day_7d: float | None = None
+
+
+class TrainingDataDownloadResult(SQLModel):
+    """Response envelope for GET /training/download."""
+
+    rows: list[PacemakerTelemetryPublic]
+    count: int
+    server_newest_ts: int | None = Field(
+        default=None,
+        description="Unix epoch seconds of the newest telemetry row on the server.",
+    )
+    maturity_cutoff_ts: int | None = Field(
+        default=None,
+        description=(
+            "Unix epoch seconds of the maturity boundary "
+            "(server_newest_ts − 7 days). Only rows with "
+            "timestamp <= this value are returned."
+        ),
+    )
+
+
+class TrainingJobRequest(SQLModel, table=True):
+    """Persistent flag set by the frontend to signal that local compute
+    should start a training run."""
+
+    __tablename__ = "training_job_request"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    is_pending: bool = Field(default=True, index=True)
+    requested_by: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="user.id",
+        nullable=True,
+        ondelete="SET NULL",
+    )
+    consumed_at: datetime | None = Field(
+        default=None,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    cancelled_at: datetime | None = Field(
+        default=None,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+
+
+class TrainingJobRequestPublic(SQLModel):
+    """Response model when creating or inspecting a training job request."""
+
+    id: uuid.UUID
+    created_at: datetime | None = None
+    is_pending: bool
+    requested_by: uuid.UUID | None = None
+    consumed_at: datetime | None = None
+    cancelled_at: datetime | None = None
+
+
 class ModelArtifactUploadMetadata(SQLModel):
     client_version_id: str | None = Field(default=None, max_length=255)
     source_run_id: str | None = Field(default=None, max_length=255)

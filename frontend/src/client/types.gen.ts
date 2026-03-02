@@ -90,6 +90,28 @@ export type PacemakerTelemetryIngestResult = {
     duplicate_existing_count: number;
 };
 
+/**
+ * Single telemetry row returned by the training-data download endpoint.
+ */
+export type PacemakerTelemetryPublic = {
+    id: string;
+    patient_id: number;
+    timestamp: string;
+    lead_impedance_ohms: number;
+    capture_threshold_v: number;
+    r_wave_sensing_mv: number;
+    battery_voltage_v: number;
+    target_fail_next_7d?: (number | null);
+    lead_impedance_ohms_rolling_mean_3d?: (number | null);
+    lead_impedance_ohms_rolling_mean_7d?: (number | null);
+    capture_threshold_v_rolling_mean_3d?: (number | null);
+    capture_threshold_v_rolling_mean_7d?: (number | null);
+    lead_impedance_ohms_delta_per_day_3d?: (number | null);
+    lead_impedance_ohms_delta_per_day_7d?: (number | null);
+    capture_threshold_v_delta_per_day_3d?: (number | null);
+    capture_threshold_v_delta_per_day_7d?: (number | null);
+};
+
 export type PrivateUserCreate = {
     email: string;
     password: string;
@@ -100,6 +122,34 @@ export type PrivateUserCreate = {
 export type Token = {
     access_token: string;
     token_type?: string;
+};
+
+/**
+ * Response envelope for GET /training/download.
+ */
+export type TrainingDataDownloadResult = {
+    rows: Array<PacemakerTelemetryPublic>;
+    count: number;
+    /**
+     * Unix epoch seconds of the newest telemetry row on the server.
+     */
+    server_newest_ts?: (number | null);
+    /**
+     * Unix epoch seconds of the maturity boundary (server_newest_ts − 7 days). Only rows with timestamp <= this value are returned.
+     */
+    maturity_cutoff_ts?: (number | null);
+};
+
+/**
+ * Response model when creating or inspecting a training job request.
+ */
+export type TrainingJobRequestPublic = {
+    id: string;
+    created_at?: (string | null);
+    is_pending: boolean;
+    requested_by?: (string | null);
+    consumed_at?: (string | null);
+    cancelled_at?: (string | null);
 };
 
 export type UpdatePassword = {
@@ -229,6 +279,27 @@ export type TelemetryIngestTelemetryBulkData = {
 };
 
 export type TelemetryIngestTelemetryBulkResponse = (PacemakerTelemetryIngestResult);
+
+export type TrainingPollTrainingJobResponse = (boolean);
+
+export type TrainingDownloadTrainingDataData = {
+    /**
+     * Unix epoch seconds of the newest telemetry row the local compute already has.
+     */
+    newestLocalTs: number;
+};
+
+export type TrainingDownloadTrainingDataResponse = (TrainingDataDownloadResult);
+
+export type TrainingCreateTrainingJobRequestResponse = (TrainingJobRequestPublic);
+
+export type TrainingClaimTrainingJobResponse = (TrainingJobRequestPublic);
+
+export type TrainingCompleteTrainingJobData = {
+    jobId: string;
+};
+
+export type TrainingCompleteTrainingJobResponse = (TrainingJobRequestPublic);
 
 export type UsersReadUsersData = {
     limit?: number;
