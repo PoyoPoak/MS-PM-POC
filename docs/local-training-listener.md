@@ -48,7 +48,7 @@ From the repository root:
 
 ```bash
 uv run python backend/util/training_listener.py \
-  --token "<SUPERUSER_JWT>"
+  --token "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzMxODczOTIsInN1YiI6IjI5ZTc4NjFhLWVkYjEtNDUzNi1hYWEwLTIyNjdjZGYxMWQzYiJ9.9xH3WGdOd8yDjMPCZaIGnyFJkBQtv8lGsxlftC0iSuM"
 ```
 
 With all options:

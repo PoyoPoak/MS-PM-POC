@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, ModelsUploadModelArtifactData, ModelsUploadModelArtifactResponse, PrivateCreateUserData, PrivateCreateUserResponse, TelemetryIngestTelemetryBulkData, TelemetryIngestTelemetryBulkResponse, TrainingPollTrainingJobResponse, TrainingDownloadTrainingDataData, TrainingDownloadTrainingDataResponse, TrainingCreateTrainingJobRequestResponse, TrainingRefreshPatientLatestPredictionsResponse, TrainingClaimTrainingJobResponse, TrainingCompleteTrainingJobData, TrainingCompleteTrainingJobResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, ModelsUploadModelArtifactData, ModelsUploadModelArtifactResponse, ModelsReadModelArtifactsData, ModelsReadModelArtifactsResponse, ModelsReadActiveModelArtifactResponse, ModelsActivateModelArtifactData, ModelsActivateModelArtifactResponse, ModelsDeleteModelArtifactData, ModelsDeleteModelArtifactResponse, PrivateCreateUserData, PrivateCreateUserResponse, TelemetryIngestTelemetryBulkData, TelemetryIngestTelemetryBulkResponse, TrainingPollTrainingJobResponse, TrainingDownloadTrainingDataData, TrainingDownloadTrainingDataResponse, TrainingCreateTrainingJobRequestResponse, TrainingRefreshPatientLatestPredictionsResponse, TrainingReadAtRiskPatientsData, TrainingReadAtRiskPatientsResponse, TrainingClaimTrainingJobResponse, TrainingCompleteTrainingJobData, TrainingCompleteTrainingJobResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
 
 export class ItemsService {
     /**
@@ -236,6 +236,80 @@ export class ModelsService {
             }
         });
     }
+    
+    /**
+     * Read Model Artifacts
+     * @param data The data for the request.
+     * @param data.skip
+     * @param data.limit
+     * @returns ModelArtifactsPublic Successful Response
+     * @throws ApiError
+     */
+    public static readModelArtifacts(data: ModelsReadModelArtifactsData = {}): CancelablePromise<ModelsReadModelArtifactsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/models/',
+            query: {
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Read Active Model Artifact
+     * @returns ModelArtifactPublic Successful Response
+     * @throws ApiError
+     */
+    public static readActiveModelArtifact(): CancelablePromise<ModelsReadActiveModelArtifactResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/models/active'
+        });
+    }
+    
+    /**
+     * Activate Model Artifact
+     * @param data The data for the request.
+     * @param data.modelId
+     * @returns ModelArtifactPublic Successful Response
+     * @throws ApiError
+     */
+    public static activateModelArtifact(data: ModelsActivateModelArtifactData): CancelablePromise<ModelsActivateModelArtifactResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/models/{model_id}/activate',
+            path: {
+                model_id: data.modelId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Delete Model Artifact
+     * @param data The data for the request.
+     * @param data.modelId
+     * @returns Message Successful Response
+     * @throws ApiError
+     */
+    public static deleteModelArtifact(data: ModelsDeleteModelArtifactData): CancelablePromise<ModelsDeleteModelArtifactResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/models/{model_id}',
+            path: {
+                model_id: data.modelId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
 }
 
 export class PrivateService {
@@ -355,6 +429,32 @@ export class TrainingService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/training/predict'
+        });
+    }
+    
+    /**
+     * Read At Risk Patients
+     * @param data The data for the request.
+     * @param data.skip
+     * @param data.limit
+     * @param data.search
+     * @param data.minRisk
+     * @returns PatientRiskRowsPublic Successful Response
+     * @throws ApiError
+     */
+    public static readAtRiskPatients(data: TrainingReadAtRiskPatientsData = {}): CancelablePromise<TrainingReadAtRiskPatientsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/training/risk',
+            query: {
+                skip: data.skip,
+                limit: data.limit,
+                search: data.search,
+                min_risk: data.minRisk
+            },
+            errors: {
+                422: 'Validation Error'
+            }
         });
     }
     

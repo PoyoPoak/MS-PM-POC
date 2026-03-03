@@ -225,6 +225,84 @@ export const MessageSchema = {
     title: 'Message'
 } as const;
 
+export const ModelArtifactPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        client_version_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Client Version Id'
+        },
+        source_run_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Source Run Id'
+        },
+        trained_at_utc: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Trained At Utc'
+        },
+        algorithm: {
+            type: 'string',
+            title: 'Algorithm'
+        },
+        metrics: {
+            additionalProperties: true,
+            type: 'object',
+            title: 'Metrics'
+        },
+        dataset_info: {
+            additionalProperties: true,
+            type: 'object',
+            title: 'Dataset Info'
+        },
+        is_active: {
+            type: 'boolean',
+            title: 'Is Active',
+            default: false
+        }
+    },
+    type: 'object',
+    required: ['id', 'algorithm', 'metrics', 'dataset_info'],
+    title: 'ModelArtifactPublic'
+} as const;
+
 export const ModelArtifactUploadResponseSchema = {
     properties: {
         id: {
@@ -293,6 +371,25 @@ export const ModelArtifactUploadResponseSchema = {
     type: 'object',
     required: ['id', 'algorithm', 'model_size_bytes', 'model_sha256'],
     title: 'ModelArtifactUploadResponse'
+} as const;
+
+export const ModelArtifactsPublicSchema = {
+    properties: {
+        data: {
+            items: {
+                '$ref': '#/components/schemas/ModelArtifactPublic'
+            },
+            type: 'array',
+            title: 'Data'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        }
+    },
+    type: 'object',
+    required: ['data', 'count'],
+    title: 'ModelArtifactsPublic'
 } as const;
 
 export const NewPasswordSchema = {
@@ -613,6 +710,74 @@ export const PacemakerTelemetryPublicSchema = {
     required: ['id', 'patient_id', 'timestamp', 'lead_impedance_ohms', 'capture_threshold_v', 'r_wave_sensing_mv', 'battery_voltage_v'],
     title: 'PacemakerTelemetryPublic',
     description: 'Single telemetry row returned by the training-data download endpoint.'
+} as const;
+
+export const PatientRiskRowPublicSchema = {
+    properties: {
+        patient_id: {
+            type: 'integer',
+            title: 'Patient Id'
+        },
+        timestamp: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Timestamp'
+        },
+        fail_probability: {
+            type: 'number',
+            title: 'Fail Probability'
+        },
+        risk_level: {
+            type: 'string',
+            title: 'Risk Level'
+        },
+        battery_voltage_v: {
+            type: 'number',
+            title: 'Battery Voltage V'
+        },
+        lead_impedance_ohms: {
+            type: 'number',
+            title: 'Lead Impedance Ohms'
+        },
+        capture_threshold_v: {
+            type: 'number',
+            title: 'Capture Threshold V'
+        }
+    },
+    type: 'object',
+    required: ['patient_id', 'timestamp', 'fail_probability', 'risk_level', 'battery_voltage_v', 'lead_impedance_ohms', 'capture_threshold_v'],
+    title: 'PatientRiskRowPublic'
+} as const;
+
+export const PatientRiskRowsPublicSchema = {
+    properties: {
+        data: {
+            items: {
+                '$ref': '#/components/schemas/PatientRiskRowPublic'
+            },
+            type: 'array',
+            title: 'Data'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        },
+        refreshed_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Refreshed At'
+        }
+    },
+    type: 'object',
+    required: ['data', 'count'],
+    title: 'PatientRiskRowsPublic'
 } as const;
 
 export const PrivateUserCreateSchema = {

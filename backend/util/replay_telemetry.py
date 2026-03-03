@@ -100,7 +100,7 @@ def parse_args() -> ReplayConfig:
     parser.add_argument(
         "--interval-ms",
         type=int,
-        default=1000,
+        default=10000,
         help="Delay between each POST request in milliseconds.",
     )
     parser.add_argument(

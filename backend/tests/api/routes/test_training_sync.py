@@ -30,6 +30,7 @@ _URL_DOWNLOAD = f"{settings.API_V1_STR}/training/download"
 _URL_REQUEST = f"{settings.API_V1_STR}/training/request"
 _URL_CLAIM = f"{settings.API_V1_STR}/training/claim"
 _URL_PREDICT = f"{settings.API_V1_STR}/training/predict"
+_URL_RISK = f"{settings.API_V1_STR}/training/risk"
 
 
 def _url_complete(job_id: uuid.UUID | str) -> str:
@@ -808,3 +809,110 @@ def test_complete_not_enough_permissions(
     fake_id = uuid.uuid4()
     r = client.post(_url_complete(fake_id), headers=normal_user_token_headers)
     assert r.status_code == 403
+
+
+def test_read_at_risk_patients_returns_ordered_rows(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _cleanup(db)
+    now = datetime.now(tz=timezone.utc)
+
+    db.add_all(
+        [
+            PatientLatestTelemetry(
+                patient_id=101,
+                timestamp=now - timedelta(minutes=2),
+                lead_impedance_ohms=1250.0,
+                capture_threshold_v=2.1,
+                r_wave_sensing_mv=5.5,
+                battery_voltage_v=2.65,
+                fail_probability=0.94,
+            ),
+            PatientLatestTelemetry(
+                patient_id=102,
+                timestamp=now - timedelta(minutes=5),
+                lead_impedance_ohms=520.0,
+                capture_threshold_v=3.2,
+                r_wave_sensing_mv=7.5,
+                battery_voltage_v=2.78,
+                fail_probability=0.87,
+            ),
+            PatientLatestTelemetry(
+                patient_id=103,
+                timestamp=now - timedelta(minutes=10),
+                lead_impedance_ohms=580.0,
+                capture_threshold_v=2.4,
+                r_wave_sensing_mv=8.0,
+                battery_voltage_v=2.71,
+                fail_probability=0.72,
+            ),
+        ]
+    )
+    db.commit()
+
+    response = client.get(_URL_RISK, headers=superuser_token_headers)
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["count"] == 3
+    assert [row["patient_id"] for row in body["data"]] == [101, 102, 103]
+    assert body["data"][0]["risk_level"] == "HIGH"
+    assert body["data"][2]["risk_level"] == "MED"
+    assert body["refreshed_at"] is not None
+
+
+def test_read_at_risk_patients_filters_and_searches(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _cleanup(db)
+    now = datetime.now(tz=timezone.utc)
+
+    db.add_all(
+        [
+            PatientLatestTelemetry(
+                patient_id=2001,
+                timestamp=now,
+                lead_impedance_ohms=400.0,
+                capture_threshold_v=1.9,
+                r_wave_sensing_mv=8.8,
+                battery_voltage_v=2.9,
+                fail_probability=0.55,
+            ),
+            PatientLatestTelemetry(
+                patient_id=2002,
+                timestamp=now,
+                lead_impedance_ohms=700.0,
+                capture_threshold_v=3.1,
+                r_wave_sensing_mv=6.0,
+                battery_voltage_v=2.6,
+                fail_probability=0.83,
+            ),
+        ]
+    )
+    db.commit()
+
+    response = client.get(
+        _URL_RISK,
+        headers=superuser_token_headers,
+        params={"min_risk": 0.8, "search": "2002"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 1
+    assert body["data"][0]["patient_id"] == 2002
+    assert body["data"][0]["risk_level"] == "HIGH"
+
+
+def test_read_at_risk_patients_permissions(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+) -> None:
+    unauthenticated = client.get(_URL_RISK)
+    unauthorized = client.get(_URL_RISK, headers=normal_user_token_headers)
+
+    assert unauthenticated.status_code == 401
+    assert unauthorized.status_code == 403

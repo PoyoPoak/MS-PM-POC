@@ -220,6 +220,22 @@ class PatientLatestTelemetry(PatientLatestTelemetryBase, table=True):
     )
 
 
+class PatientRiskRowPublic(SQLModel):
+    patient_id: int
+    timestamp: datetime
+    fail_probability: float
+    risk_level: str
+    battery_voltage_v: float
+    lead_impedance_ohms: float
+    capture_threshold_v: float
+
+
+class PatientRiskRowsPublic(SQLModel):
+    data: list[PatientRiskRowPublic]
+    count: int
+    refreshed_at: datetime | None = None
+
+
 class TrainingPredictSummary(SQLModel):
     rows_upserted: int
     rows_scored: int
@@ -330,6 +346,23 @@ class ModelArtifactUploadResponse(SQLModel):
     model_size_bytes: int
     model_sha256: str
     content_type: str | None = None
+
+
+class ModelArtifactPublic(SQLModel):
+    id: uuid.UUID
+    created_at: datetime | None = None
+    client_version_id: str | None = None
+    source_run_id: str | None = None
+    trained_at_utc: datetime | None = None
+    algorithm: str
+    metrics: dict[str, Any]
+    dataset_info: dict[str, Any]
+    is_active: bool = False
+
+
+class ModelArtifactsPublic(SQLModel):
+    data: list[ModelArtifactPublic]
+    count: int
 
 
 # Generic message
