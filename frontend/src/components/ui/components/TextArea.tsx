@@ -5,7 +5,6 @@
  */
 
 import React from "react";
-import * as SubframeCore from "@subframe/core";
 import * as SubframeUtils from "../utils";
 
 interface InputProps
