@@ -43,8 +43,14 @@ if [[ ! -d "$FRONTEND_DIR" ]]; then
     exit 1
 fi
 
+if [[ ! -f "$REPO_ROOT/bun.lock" ]]; then
+    echo "bun.lock not found at $REPO_ROOT/bun.lock"
+    echo "Cannot enforce exact package versions without a lockfile."
+    exit 1
+fi
+
 cd "$REPO_ROOT"
-bun install
+bun install --frozen-lockfile
 
 echo "Frontend dependencies are ready."
 echo "To start the frontend: cd frontend && bun run dev"

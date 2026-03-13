@@ -44,6 +44,16 @@ check_git() {
     done
 }
 
+check_uv() {
+    while true; do
+        if command -v uv >/dev/null 2>&1 && uv --version >/dev/null 2>&1; then
+            break
+        fi
+
+        prompt_and_wait "uv is required but was not found in PATH. Install uv, then continue."
+    done
+}
+
 check_docker() {
     while true; do
         if ! command -v docker >/dev/null 2>&1; then
@@ -71,6 +81,7 @@ check_docker_compose() {
 
 check_python
 check_git
+check_uv
 if [[ ! -f "$REPO_ROOT/.env" ]]; then
     if [[ -f "$REPO_ROOT/.env-template" ]]; then
         cp "$REPO_ROOT/.env-template" "$REPO_ROOT/.env"
@@ -102,13 +113,9 @@ else
     source "$VENV_DIR/bin/activate"
 fi
 
-# Upgrade pip and install uv (dependency manager)
-python -m pip install --upgrade pip
-python -m pip install --upgrade uv
-
-# Sync all backend dependencies using uv workspace config
+# Sync all backend dependencies from the committed lockfile
 cd "$REPO_ROOT"
-uv sync --all-packages
+uv sync --all-packages --frozen
 
 echo "Backend virtual environment and dependencies are ready."
 echo "To activate the environment, run: source .venv/Scripts/activate (Windows) or source .venv/bin/activate (Unix)"
