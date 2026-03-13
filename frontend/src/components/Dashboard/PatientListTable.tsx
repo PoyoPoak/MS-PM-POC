@@ -51,19 +51,25 @@ const RISK_THRESHOLDS = {
   medium: 0.4,
 }
 
-function formatRelative(value: string) {
-  const diffMs = Date.now() - new Date(value).getTime()
-  const mins = Math.max(1, Math.floor(diffMs / 60000))
-  if (mins < 60) {
-    return `${mins}m ago`
+function formatTimestamp(value: string) {
+  return new Date(value).toLocaleString([], {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
+}
+
+function formatRiskScorePercentage(riskScore: number | null) {
+  if (riskScore === null) {
+    return "--"
   }
 
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) {
-    return `${hours}h ago`
-  }
-
-  return `${Math.floor(hours / 24)}d ago`
+  return `${(riskScore * 100).toLocaleString([], {
+    maximumFractionDigits: 3,
+  })}%`
 }
 
 function getRiskLabel(riskScore: number | null) {
@@ -223,9 +229,7 @@ export function PatientListTable({
           return (
             <div className="flex items-center gap-2">
               <span className="font-semibold tabular-nums">
-                {row.original.riskScore === null
-                  ? "--"
-                  : `${(row.original.riskScore * 100).toFixed(1)}%`}
+                {formatRiskScorePercentage(row.original.riskScore)}
               </span>
               <span
                 className={cn(
@@ -377,7 +381,7 @@ export function PatientListTable({
         ),
         cell: ({ row }) => (
           <span className="text-sm text-muted-foreground">
-            {formatRelative(row.original.lastUpdate)}
+            {formatTimestamp(row.original.lastUpdate)}
           </span>
         ),
       },
