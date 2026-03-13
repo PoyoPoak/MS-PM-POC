@@ -1,709 +1,189 @@
 ---
 name: backend-testing
-description: Backend testing guide for writing pytest tests, adding test coverage, creating fixtures, and fixing failing backend tests. Use when writing tests for FastAPI endpoints, CRUD operations, authentication, adding test coverage, creating test fixtures, or debugging failing backend tests with pytest.
+description: Backend testing guide for writing and maintaining pytest coverage in this repository. Use when adding or changing FastAPI routes, SQLModel CRUD behavior, telemetry ingestion, training-sync lifecycle endpoints, model-artifact upload flows, or backend scripts.
 ---
 
 # Backend Testing Skill
 
-This skill guides you through writing comprehensive backend tests using pytest for this FastAPI application.
+## Goal
 
-## When to Use This Skill
+Ship backend changes with reliable pytest coverage that matches this repository's real architecture (auth, telemetry, training sync, model artifacts) and keeps CI at >=90% coverage.
 
-- Writing tests for new API endpoints
-- Adding test coverage to meet the ≥90% requirement
-- Creating test fixtures for reusable test data
-- Fixing failing backend tests
-- Testing CRUD operations
-- Testing authentication and authorization
-- Debugging test failures
+## Use This Skill When
 
-## Test Coverage Requirement
+- Adding or changing backend API routes under backend/app/api/routes
+- Changing behavior in backend/app/crud.py or backend/app/models.py
+- Adding telemetry ingestion, training workflow, or model artifact logic
+- Fixing flaky/failing pytest cases
+- Increasing coverage for CI
 
-**All backend code MUST maintain ≥90% test coverage** - CI will fail otherwise.
+## Primary References
+
+- .github/copilot-instructions.md
+- backend/tests/conftest.py
+- backend/tests/api/routes/test_items.py
+- backend/tests/api/routes/test_telemetry.py
+- backend/tests/api/routes/test_training_sync.py
+- backend/tests/api/routes/test_model_artifacts.py
+- docs/training-sync-endpoints.md
+- docs/pacemaker-telemetry.md
+
+## Test Environment Baseline
+
+1. Start required services:
 
 ```bash
-# Check coverage after running tests
-cd backend && uv run coverage report --fail-under=90 && cd ..
-```
-
-**Reference**: `.github/copilot-instructions.md` line 88
-
-## Test Directory Structure
-
-```
-backend/tests/
-├── conftest.py              # Shared fixtures
-├── api/
-│   └── routes/
-│       ├── test_items.py    # Endpoint tests for items
-│       ├── test_users.py    # Endpoint tests for users
-│       └── test_login.py    # Authentication tests
-├── crud/
-│   ├── test_user.py         # CRUD operation tests for users
-│   └── test_item.py         # CRUD operation tests for items
-└── utils/
-    ├── item.py              # Test utilities for items
-    ├── user.py              # Test utilities for users
-    └── utils.py             # General test utilities
-```
-
-## Key Fixtures from conftest.py
-
-### Database Session
-
-```python
-@pytest.fixture(scope="session", autouse=True)
-def db() -> Generator[Session, None, None]:
-    with Session(engine) as session:
-        init_db(session)
-        yield session
-        # Cleanup after all tests
-```
-
-**Scope**: `session` - shared across all tests
-**Usage**: `def test_something(db: Session) -> None:`
-
-### Test Client
-
-```python
-@pytest.fixture(scope="module")
-def client() -> Generator[TestClient, None, None]:
-    with TestClient(app) as c:
-        yield c
-```
-
-**Scope**: `module` - one per test file
-**Usage**: `def test_endpoint(client: TestClient) -> None:`
-
-### Authentication Token Headers
-
-```python
-@pytest.fixture(scope="module")
-def superuser_token_headers(client: TestClient) -> dict[str, str]:
-    return get_superuser_token_headers(client)
-
-@pytest.fixture(scope="module")
-def normal_user_token_headers(client: TestClient, db: Session) -> dict[str, str]:
-    return authentication_token_from_email(
-        client=client, email=settings.EMAIL_TEST_USER, db=db
-    )
-```
-
-**Usage**:
-- `superuser_token_headers` - For testing admin-only endpoints
-- `normal_user_token_headers` - For testing regular user permissions
-
-**Reference**: `backend/tests/conftest.py` lines 16-42
-
-## Required Test Cases for CRUD Resources
-
-For each CRUD resource (e.g., items, users, posts), implement **11 test cases**:
-
-### 1. Create Tests
-
-```python
-def test_create_{thing}(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    data = {"field1": "value1", "field2": "value2"}
-    response = client.post(
-        f"{settings.API_V1_STR}/{things}/",
-        headers=superuser_token_headers,
-        json=data,
-    )
-    assert response.status_code == 200
-    content = response.json()
-    assert content["field1"] == data["field1"]
-    assert content["field2"] == data["field2"]
-    assert "id" in content
-    assert "owner_id" in content
-```
-
-### 2. Read Single Tests
-
-```python
-def test_read_{thing}(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    {thing} = create_random_{thing}(db)
-    response = client.get(
-        f"{settings.API_V1_STR}/{things}/{{thing}.id}",
-        headers=superuser_token_headers,
-    )
-    assert response.status_code == 200
-    content = response.json()
-    assert content["id"] == str({thing}.id)
-```
-
-### 3. Read Single Not Found
-
-```python
-def test_read_{thing}_not_found(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    response = client.get(
-        f"{settings.API_V1_STR}/{things}/{uuid.uuid4()}",
-        headers=superuser_token_headers,
-    )
-    assert response.status_code == 404
-    content = response.json()
-    assert content["detail"] == "{Thing} not found"
-```
-
-### 4. Read Single Permission Check
-
-```python
-def test_read_{thing}_not_enough_permissions(
-    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
-) -> None:
-    {thing} = create_random_{thing}(db)
-    response = client.get(
-        f"{settings.API_V1_STR}/{things}/{{thing}.id}",
-        headers=normal_user_token_headers,
-    )
-    assert response.status_code == 403
-    content = response.json()
-    assert content["detail"] == "Not enough permissions"
-```
-
-### 5. Read List
-
-```python
-def test_read_{things}(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    create_random_{thing}(db)
-    create_random_{thing}(db)
-    response = client.get(
-        f"{settings.API_V1_STR}/{things}/",
-        headers=superuser_token_headers,
-    )
-    assert response.status_code == 200
-    content = response.json()
-    assert len(content["data"]) >= 2
-```
-
-### 6. Update Tests
-
-```python
-def test_update_{thing}(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    {thing} = create_random_{thing}(db)
-    data = {"field1": "Updated value"}
-    response = client.put(
-        f"{settings.API_V1_STR}/{things}/{{thing}.id}",
-        headers=superuser_token_headers,
-        json=data,
-    )
-    assert response.status_code == 200
-    content = response.json()
-    assert content["field1"] == data["field1"]
-    assert content["id"] == str({thing}.id)
-```
-
-### 7. Update Not Found
-
-```python
-def test_update_{thing}_not_found(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    data = {"field1": "Updated value"}
-    response = client.put(
-        f"{settings.API_V1_STR}/{things}/{uuid.uuid4()}",
-        headers=superuser_token_headers,
-        json=data,
-    )
-    assert response.status_code == 404
-    content = response.json()
-    assert content["detail"] == "{Thing} not found"
-```
-
-### 8. Update Permission Check
-
-```python
-def test_update_{thing}_not_enough_permissions(
-    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
-) -> None:
-    {thing} = create_random_{thing}(db)
-    data = {"field1": "Updated value"}
-    response = client.put(
-        f"{settings.API_V1_STR}/{things}/{{thing}.id}",
-        headers=normal_user_token_headers,
-        json=data,
-    )
-    assert response.status_code == 403
-    content = response.json()
-    assert content["detail"] == "Not enough permissions"
-```
-
-### 9. Delete Tests
-
-```python
-def test_delete_{thing}(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    {thing} = create_random_{thing}(db)
-    response = client.delete(
-        f"{settings.API_V1_STR}/{things}/{{thing}.id}",
-        headers=superuser_token_headers,
-    )
-    assert response.status_code == 200
-    content = response.json()
-    assert content["message"] == "{Thing} deleted successfully"
-```
-
-### 10. Delete Not Found
-
-```python
-def test_delete_{thing}_not_found(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    response = client.delete(
-        f"{settings.API_V1_STR}/{things}/{uuid.uuid4()}",
-        headers=superuser_token_headers,
-    )
-    assert response.status_code == 404
-    content = response.json()
-    assert content["detail"] == "{Thing} not found"
-```
-
-### 11. Delete Permission Check
-
-```python
-def test_delete_{thing}_not_enough_permissions(
-    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
-) -> None:
-    {thing} = create_random_{thing}(db)
-    response = client.delete(
-        f"{settings.API_V1_STR}/{things}/{{thing}.id}",
-        headers=normal_user_token_headers,
-    )
-    assert response.status_code == 403
-    content = response.json()
-    assert content["detail"] == "Not enough permissions"
-```
-
-**Reference**: `backend/tests/api/routes/test_items.py` (complete example with all 11 cases)
-
-## Test Utility Pattern
-
-Create helper functions in `backend/tests/utils/{thing}.py` for generating test data:
-
-```python
-from sqlmodel import Session
-from app import crud
-from app.models import {Thing}, {Thing}Create
-from tests.utils.user import create_random_user
-from tests.utils.utils import random_lower_string
-
-
-def create_random_{thing}(db: Session) -> {Thing}:
-    user = create_random_user(db)
-    owner_id = user.id
-    assert owner_id is not None
-    field1 = random_lower_string()
-    field2 = random_lower_string()
-    {thing}_in = {Thing}Create(field1=field1, field2=field2)
-    return crud.create_{thing}(session=db, {thing}_in={thing}_in, owner_id=owner_id)
-```
-
-**Benefits**:
-- Reusable across multiple test files
-- Consistent test data generation
-- Easy to modify when model changes
-
-**Reference**: `backend/tests/utils/item.py`
-
-## Testing Rules and Conventions
-
-### Return Type Annotations
-
-All test functions must have `-> None` return annotation:
-
-```python
-def test_something(client: TestClient) -> None:  # ✅ Correct
-    pass
-
-def test_something(client: TestClient):  # ❌ Wrong - missing return type
-    pass
-```
-
-### Use settings.API_V1_STR for URL Prefix
-
-Always construct URLs using the `settings.API_V1_STR` constant:
-
-```python
-from app.core.config import settings
-
-# ✅ Correct
-response = client.get(f"{settings.API_V1_STR}/items/{item.id}")
-
-# ❌ Wrong - hardcoded prefix
-response = client.get(f"/api/v1/items/{item.id}")
-```
-
-**Reference**: `backend/tests/api/routes/test_items.py` throughout
-
-### No print() Statements
-
-Ruff rule T201 forbids `print()` statements. Use pytest's output capture instead:
-
-```python
-# ❌ Wrong
-def test_something() -> None:
-    print(f"Testing with value: {value}")
-
-# ✅ Correct - pytest captures this automatically
-def test_something() -> None:
-    result = some_function()
-    assert result == expected, f"Expected {expected}, got {result}"
-```
-
-**Reference**: memory: python conventions (T201 rule)
-
-### UUID Handling in Assertions
-
-When comparing UUIDs in JSON responses, convert to string:
-
-```python
-content = response.json()
-assert content["id"] == str(item.id)  # ✅ Correct
-assert content["id"] == item.id       # ❌ Wrong - type mismatch
-```
-
-## Running Tests
-
-### Full Test Suite
-
-```bash
-# Start required services
 docker compose up -d db mailcatcher
+```
 
-# Run migrations and seed data
+2. Ensure migrations and seed/prestart tasks ran:
+
+```bash
 cd backend && uv run bash scripts/prestart.sh && cd ..
+```
 
-# Run all tests with coverage
+3. Run tests:
+
+```bash
 cd backend && uv run bash scripts/tests-start.sh && cd ..
+```
 
-# Check coverage threshold
+4. Verify coverage gate:
+
+```bash
 cd backend && uv run coverage report --fail-under=90 && cd ..
 ```
 
-**Reference**: `.github/copilot-instructions.md` lines 74-88, memory: build and test
+## Repository Test Layout
 
-### Run Specific Test File
+- backend/tests/conftest.py: shared fixtures and auth headers
+- backend/tests/api/routes/: endpoint-level contract tests
+- backend/tests/crud/: CRUD unit/integration tests
+- backend/tests/scripts/: startup and initialization script tests
+- backend/tests/test_telemetry_seed.py: telemetry seed behavior tests
 
-```bash
-cd backend
-uv run pytest tests/api/routes/test_items.py -v
-cd ..
-```
+## Required Test Design Rules
 
-### Run Specific Test Function
+- Always annotate test function return types with -> None.
+- Use settings.API_V1_STR for API prefixes instead of hardcoded /api/v1.
+- Prefer existing fixtures from conftest.py before adding new fixtures.
+- Avoid print; rely on assertions and pytest output.
+- Assert both status code and response body contract.
+- Cover both auth and permission boundaries on protected endpoints.
 
-```bash
-cd backend
-uv run pytest tests/api/routes/test_items.py::test_create_item -v
-cd ..
-```
+## Auth and Permission Matrix
 
-### Run with Output
+For protected routes, cover these paths unless the endpoint contract states otherwise:
 
-```bash
-cd backend
-uv run pytest tests/api/routes/test_items.py -v -s
-cd ..
-```
+1. Superuser happy path (200-level expected)
+2. Normal-user forbidden path (typically 403)
+3. Unauthenticated path (typically 401)
 
-### Check Coverage for Specific Module
+Reuse:
 
-```bash
-cd backend
-uv run coverage run -m pytest tests/api/routes/test_items.py
-uv run coverage report --include="app/api/routes/items.py"
-cd ..
-```
+- superuser_token_headers
+- normal_user_token_headers
 
-## Testing Different Scenarios
+## Endpoint Category Playbooks
 
-### Testing Authentication
+### CRUD-style Endpoints (items/users-like)
 
-```python
-def test_access_token_with_invalid_credentials(client: TestClient) -> None:
-    data = {"username": "invalid@example.com", "password": "wrongpassword"}
-    response = client.post(
-        f"{settings.API_V1_STR}/login/access-token",
-        data=data,
-    )
-    assert response.status_code == 400
-```
+Minimum coverage set:
 
-### Testing Validation Errors (422)
+1. create success
+2. read single success
+3. read single not found
+4. read permission denied
+5. list success
+6. update success
+7. update not found
+8. update permission denied
+9. delete success
+10. delete not found
+11. delete permission denied
 
-Test invalid data that fails Pydantic validation:
+Reference pattern: backend/tests/api/routes/test_items.py
 
-**Empty/Missing Required Fields**:
-```python
-def test_create_item_empty_title(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    data = {"title": ""}  # Empty string fails min_length=1
-    response = client.post(
-        f"{settings.API_V1_STR}/items/",
-        headers=superuser_token_headers,
-        json=data,
-    )
-    assert response.status_code == 422  # Validation error
-    content = response.json()
-    assert "detail" in content
-```
+### Telemetry Ingest Endpoints
 
-**Wrong Data Types**:
-```python
-def test_create_item_wrong_type(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    data = {"title": 123}  # Integer instead of string
-    response = client.post(
-        f"{settings.API_V1_STR}/items/",
-        headers=superuser_token_headers,
-        json=data,
-    )
-    assert response.status_code == 422
-```
+In addition to happy/permission paths, cover:
 
-**Field Length Violations**:
-```python
-def test_create_item_title_too_long(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    data = {"title": "x" * 300}  # Exceeds max_length=255
-    response = client.post(
-        f"{settings.API_V1_STR}/items/",
-        headers=superuser_token_headers,
-        json=data,
-    )
-    assert response.status_code == 422
-```
+- invalid timestamp or payload shape validation (422)
+- non-list body rejection when list is required
+- empty batch rejection
+- oversized batch rejection
+- duplicate handling summary fields where applicable
+- target label validation (0/1/null semantics)
 
-### Testing Pagination
+Reference pattern: backend/tests/api/routes/test_telemetry.py and backend/tests/api/routes/test_telemetry_route.py
 
-```python
-def test_read_items_with_pagination(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    # Create 5 items
-    for _ in range(5):
-        create_random_item(db)
+### Training Sync Endpoints
 
-    # Get first page
-    response = client.get(
-        f"{settings.API_V1_STR}/items/?skip=0&limit=2",
-        headers=superuser_token_headers,
-    )
-    assert response.status_code == 200
-    content = response.json()
-    assert len(content["data"]) == 2
-    assert content["count"] >= 5
+Treat these as a state-machine API, not simple CRUD. Cover:
 
-    # Get second page
-    response = client.get(
-        f"{settings.API_V1_STR}/items/?skip=2&limit=2",
-        headers=superuser_token_headers,
-    )
-    assert response.status_code == 200
-    content = response.json()
-    assert len(content["data"]) == 2
-```
+- poll when no jobs vs pending jobs
+- claim newest pending job
+- cancellation of older pending jobs on claim
+- conflict when an in-progress job already exists
+- complete transitions and invalid transition conflicts
+- maturity-window behavior for download endpoint
+- predict behavior when model exists and when model is missing
 
-### Testing Unique Constraints (400)
+Reference pattern: backend/tests/api/routes/test_training_sync.py
 
-Test duplicate data when unique constraints exist:
+### Model Artifact Upload Endpoints
 
-```python
-def test_create_user_duplicate_email(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    # Create first user
-    email = "test@example.com"
-    data = {"email": email, "password": "password123"}
-    response = client.post(
-        f"{settings.API_V1_STR}/users/",
-        headers=superuser_token_headers,
-        json=data,
-    )
-    assert response.status_code == 200
+Cover multipart and metadata contract details:
 
-    # Try to create duplicate
-    response = client.post(
-        f"{settings.API_V1_STR}/users/",
-        headers=superuser_token_headers,
-        json=data,
-    )
-    assert response.status_code == 400
-    content = response.json()
-    assert "already exists" in content["detail"].lower()
-```
+- successful upload with valid model_file + metadata_json
+- invalid JSON metadata handling
+- required metadata field validation
+- empty file rejection
+- permission and unauthenticated behavior
 
-**Reference**: `backend/tests/api/routes/test_users.py` for duplicate email tests
+Reference pattern: backend/tests/api/routes/test_model_artifacts.py
 
-### Testing Unauthenticated Requests (401)
+## Creating New Tests for a Backend Change
 
-Test endpoints without authentication token:
+1. Locate the closest existing test module by endpoint type.
+2. Mirror naming and fixture usage from that module.
+3. Add the smallest set of tests that proves behavior and guards regressions.
+4. If model fields changed, update related utilities in backend/tests/utils.
+5. Run targeted tests first, then full backend test command.
 
-```python
-def test_create_item_unauthenticated(client: TestClient) -> None:
-    data = {"title": "Test Item", "description": "Test"}
-    response = client.post(
-        f"{settings.API_V1_STR}/items/",
-        json=data,
-        # No headers - unauthenticated
-    )
-    assert response.status_code == 401
-    content = response.json()
-    assert content["detail"] == "Not authenticated"
-```
+## Useful Commands
 
-### Testing Query Parameters and Filters
-
-If your endpoint supports filtering or search:
-
-```python
-def test_read_items_with_filter(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    # Create items with different attributes
-    item1 = create_random_item(db)
-    item2 = create_random_item(db)
-
-    # Test filter query parameter
-    response = client.get(
-        f"{settings.API_V1_STR}/items/?status=active",
-        headers=superuser_token_headers,
-    )
-    assert response.status_code == 200
-    content = response.json()
-    # Verify filtering works correctly
-    for item in content["data"]:
-        assert item["status"] == "active"
-```
-
-**Note**: Only add filter tests if your endpoint actually implements filtering.
-
-### Testing CRUD Operations Directly
-
-For testing CRUD functions without HTTP layer:
-
-```python
-from app import crud
-from app.models import ItemCreate
-
-def test_crud_create_item(db: Session) -> None:
-    user = create_random_user(db)
-    item_in = ItemCreate(title="Test", description="Test description")
-    item = crud.create_item(session=db, item_in=item_in, owner_id=user.id)
-    assert item.title == "Test"
-    assert item.owner_id == user.id
-```
-
-## Common Testing Pitfalls
-
-- **Not using `settings.API_V1_STR`** - Always use the constant for URL construction
-- **Missing `-> None` return annotation** - Mypy will complain
-- **Using `print()` for debugging** - Use pytest's `-s` flag and assertions instead
-- **Forgetting to start database** - Tests require `docker compose up -d db mailcatcher`
-- **Not running prestart.sh** - Migrations must be applied before tests
-- **UUID type mismatches** - Convert to string when comparing JSON responses
-- **Testing without isolation** - Use `create_random_{thing}` helpers to avoid test interference
-- **Not achieving ≥90% coverage** - CI will fail; add missing test cases
-
-## Debugging Test Failures
-
-### View Detailed Output
+Run one test module:
 
 ```bash
-cd backend
-uv run pytest tests/api/routes/test_items.py -vv
-cd ..
+cd backend && uv run pytest tests/api/routes/test_training_sync.py -v && cd ..
 ```
 
-### Stop on First Failure
+Run one test function:
 
 ```bash
-cd backend
-uv run pytest tests/api/routes/test_items.py -x
-cd ..
+cd backend && uv run pytest tests/api/routes/test_telemetry.py::test_bulk_ingest_telemetry -v && cd ..
 ```
 
-### Run Last Failed Tests
+Run backend lint after test changes:
 
 ```bash
-cd backend
-uv run pytest --lf
-cd ..
+cd backend && uv run bash scripts/lint.sh && cd ..
 ```
 
-### Show Local Variables on Failure
+## Coverage and Regression Checklist
 
-```bash
-cd backend
-uv run pytest tests/api/routes/test_items.py -l
-cd ..
-```
+- [ ] New/changed behavior has direct tests in backend/tests/**
+- [ ] Permission and unauthenticated paths are covered for protected endpoints
+- [ ] State transitions are covered for workflow endpoints (training)
+- [ ] Validation failures are covered for input contracts
+- [ ] Backend tests pass via scripts/tests-start.sh
+- [ ] Coverage remains >=90%
 
-### Run with pdb on Failure
+## Common Pitfalls
 
-```python
-# Add this to test
-import pdb; pdb.set_trace()
-
-# Or run with --pdb
-cd backend
-uv run pytest tests/api/routes/test_items.py --pdb
-cd ..
-```
-
-## Coverage Reports
-
-### Generate HTML Coverage Report
-
-```bash
-cd backend
-uv run coverage run -m pytest
-uv run coverage html
-cd ..
-# Open backend/htmlcov/index.html in browser
-```
-
-### Show Missing Lines
-
-```bash
-cd backend
-uv run coverage report -m
-cd ..
-```
-
-### Coverage for Specific Files
-
-```bash
-cd backend
-uv run coverage report --include="app/api/routes/*.py"
-cd ..
-```
-
-## Testing Checklist
-
-- [ ] Created test file in appropriate directory (`api/routes/`, `crud/`, `utils/`)
-- [ ] Imported required fixtures: `client`, `db`, `superuser_token_headers`, `normal_user_token_headers`
-- [ ] Implemented 11 test cases for CRUD resource (create, read, read-not-found, read-permissions, read-all, update, update-not-found, update-permissions, delete, delete-not-found, delete-permissions)
-- [ ] Created test utility helper in `tests/utils/{thing}.py`
-- [ ] All test functions have `-> None` return annotation
-- [ ] Used `settings.API_V1_STR` for all API URLs
-- [ ] Converted UUIDs to strings in assertions: `str(item.id)`
-- [ ] No `print()` statements (T201 rule)
-- [ ] Started database: `docker compose up -d db mailcatcher`
-- [ ] Ran migrations: `cd backend && uv run bash scripts/prestart.sh`
-- [ ] Ran tests: `cd backend && uv run bash scripts/tests-start.sh`
-- [ ] Verified ≥90% coverage: `cd backend && uv run coverage report --fail-under=90`
-- [ ] All tests passing
+- Writing tests against outdated template-only assumptions instead of telemetry/training contracts
+- Forgetting to run prestart.sh before tests when schema changed
+- Adding duplicate fixtures rather than using conftest.py fixtures
+- Asserting only status codes without checking contract fields
+- Ignoring permission paths for superuser-protected endpoints

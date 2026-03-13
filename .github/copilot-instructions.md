@@ -14,6 +14,16 @@ Trust these instructions first. Only search the codebase if information here is 
 - **Linting**: Ruff + mypy (backend) · Biome (frontend) · prek pre-commit hooks
 - **Testing**: pytest (backend, ≥90% coverage required) · Playwright (frontend E2E)
 
+## Template Baseline Docs
+
+This repository was originally bootstrapped from the FastAPI full-stack template. When checking inherited behavior, use these baseline docs:
+
+- `docs/template/development.md`
+- `docs/template/deployment.md`
+- `docs/template/README.md`
+
+Project-specific behavior in `docs/` and this file takes precedence over template docs when they differ.
+
 ## Project Layout
 
 ```
@@ -138,6 +148,8 @@ If you modify `backend/app/api/`, `backend/app/models.py`, or any backend route/
 
 When implementation changes are made, update documentation in the same work item when appropriate.
 
+Canonical map for where agent-facing knowledge belongs: `docs/agent-documentation-system.md`.
+
 - **Class/major function/component changes**: update or create the corresponding instruction file in `.github/instructions/` when behavior, inputs/outputs, contracts, or usage expectations change.
 - **Feature/workflow/API/data model changes**: update impacted docs under `docs/` (for example `docs/project.md`, `docs/pacemaker-telemetry.md`, `docs/development.md`, `docs/ml-engine.md`).
 - **Definition of done**: do not treat implementation-only changes as complete until relevant `.github/instructions` and/or `docs` updates are included.
@@ -173,6 +185,7 @@ This project has **loaded agent skills** that provide domain-specific instructio
 | `backend-testing` | Writing pytest tests, adding coverage, creating fixtures, fixing test failures | `.github/skills/backend-testing/SKILL.md` |
 | `create-endpoint` | Adding new API routes, CRUD resources, full-stack vertical slices | `.github/skills/create-endpoint/SKILL.md` |
 | `database-migration` | Modifying schemas, adding/removing columns, creating tables, changing SQLModel fields | `.github/skills/database-migration/SKILL.md` |
+| `documentation-sync` | Keeping docs/instructions/skills synchronized with implementation changes | `.github/skills/documentation-sync/SKILL.md` |
 | `frontend-component` | Creating React components, pages, forms, data tables, dialogs | `.github/skills/frontend-component/SKILL.md` |
 
 ### General capability skills (`.agents/skills/`)

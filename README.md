@@ -234,6 +234,8 @@ bash ./scripts/generate-client.sh
 
 ## Deep-dive documentation index
 
+- [Documentation hub](docs/README.md)
+- [Agent documentation system](docs/agent-documentation-system.md)
 - [Project scope and architecture](docs/project.md)
 - [Pacemaker telemetry feature reference](docs/pacemaker-telemetry.md)
 - [Data generator behavior](docs/data-generator.md)

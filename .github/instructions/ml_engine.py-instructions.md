@@ -33,7 +33,7 @@ Do not expand this file into API routing, database ingestion orchestration, or f
 	- Predictions must align to training-time feature names/order.
 	- Missing required inference features must raise a clear `ValueError`.
 - Keep prediction output additive:
-	- Return original input columns plus `predicted_label` and `risk_probability`.
+	- Return original input columns plus `risk_probability`.
 
 ## Evaluation Requirements
 
@@ -74,3 +74,4 @@ Avoid returning metrics in a text-only format.
 ## Documentation Sync Rule
 
 When changing behavior in `ml_engine.py`, update the usage/behavior documentation in `docs/ml-engine.md` in the same change set so docs and implementation remain aligned.
+If listener-facing behavior changes (for example artifact metadata shape used by upload flow), also review `docs/local-training-listener.md` for consistency.
