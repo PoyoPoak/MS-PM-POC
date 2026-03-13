@@ -4,8 +4,8 @@ import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import icon from "/assets/images/fastapi-icon.svg"
 import iconLight from "/assets/images/fastapi-icon-light.svg"
-import logo from "/assets/images/fastapi-logo.svg"
-import logoLight from "/assets/images/fastapi-logo-light.svg"
+import logo from "/assets/images/logo.svg"
+import logoLight from "/assets/images/logo.svg"
 
 interface LogoProps {
   variant?: "full" | "icon" | "responsive"
@@ -31,7 +31,7 @@ export function Logo({
           src={fullLogo}
           alt="FastAPI"
           className={cn(
-            "h-6 w-auto group-data-[collapsible=icon]:hidden",
+            "w-full h-auto group-data-[collapsible=icon]:hidden",
             className,
           )}
         />
@@ -39,7 +39,7 @@ export function Logo({
           src={iconLogo}
           alt="FastAPI"
           className={cn(
-            "size-5 hidden group-data-[collapsible=icon]:block",
+            "w-full h-auto hidden group-data-[collapsible=icon]:block",
             className,
           )}
         />
