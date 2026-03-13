@@ -112,9 +112,68 @@ def _seed_model_artifact(db: Session) -> ModelArtifact:
         hyperparameters={"n_estimators": 10, "random_state": 42},
         metrics={"test_accuracy": 1.0},
         dataset_info={"train_rows": 2, "test_rows": 0, "n_features": 12},
+        is_active=True,
         content_type="application/octet-stream",
         model_size_bytes=len(buffer.getvalue()),
         model_sha256="a" * 64,
+        model_blob=buffer.getvalue(),
+    )
+    db.add(artifact)
+    db.commit()
+    db.refresh(artifact)
+    return artifact
+
+
+def _seed_single_class_model_artifact(db: Session, *, klass: int) -> ModelArtifact:
+    """Insert a trained RF model artifact with a single class in training labels."""
+    X_train = pd.DataFrame(
+        [
+            {
+                "lead_impedance_ohms": 490.0,
+                "capture_threshold_v": 0.9,
+                "r_wave_sensing_mv": 9.2,
+                "battery_voltage_v": 3.0,
+                "lead_impedance_ohms_rolling_mean_3d": 488.0,
+                "lead_impedance_ohms_rolling_mean_7d": 486.0,
+                "capture_threshold_v_rolling_mean_3d": 0.88,
+                "capture_threshold_v_rolling_mean_7d": 0.87,
+                "lead_impedance_ohms_delta_per_day_3d": 0.2,
+                "lead_impedance_ohms_delta_per_day_7d": 0.1,
+                "capture_threshold_v_delta_per_day_3d": 0.01,
+                "capture_threshold_v_delta_per_day_7d": 0.005,
+            },
+            {
+                "lead_impedance_ohms": 500.0,
+                "capture_threshold_v": 1.0,
+                "r_wave_sensing_mv": 8.5,
+                "battery_voltage_v": 2.9,
+                "lead_impedance_ohms_rolling_mean_3d": 499.0,
+                "lead_impedance_ohms_rolling_mean_7d": 498.0,
+                "capture_threshold_v_rolling_mean_3d": 0.98,
+                "capture_threshold_v_rolling_mean_7d": 0.97,
+                "lead_impedance_ohms_delta_per_day_3d": 0.25,
+                "lead_impedance_ohms_delta_per_day_7d": 0.15,
+                "capture_threshold_v_delta_per_day_3d": 0.02,
+                "capture_threshold_v_delta_per_day_7d": 0.01,
+            },
+        ]
+    )
+    y_train = [klass, klass]
+    model = RandomForestClassifier(n_estimators=10, random_state=42)
+    model.fit(X_train, y_train)
+
+    buffer = BytesIO()
+    joblib.dump(model, buffer)
+
+    artifact = ModelArtifact(
+        algorithm="RandomForestClassifier",
+        hyperparameters={"n_estimators": 10, "random_state": 42},
+        metrics={"test_accuracy": 1.0},
+        dataset_info={"train_rows": 2, "test_rows": 0, "n_features": 12},
+        is_active=True,
+        content_type="application/octet-stream",
+        model_size_bytes=len(buffer.getvalue()),
+        model_sha256="c" * 64,
         model_blob=buffer.getvalue(),
     )
     db.add(artifact)
@@ -448,7 +507,47 @@ def test_predict_latest_snapshot_scores_rows(
     assert rows[1].fail_probability is not None
 
 
-def test_predict_returns_404_when_model_missing_but_still_upserts(
+def test_predict_handles_single_class_model_probabilities(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _cleanup(db)
+
+    now = datetime.now(tz=timezone.utc)
+    db.add(
+        PacemakerTelemetry(
+            patient_id=55,
+            timestamp=now,
+            lead_impedance_ohms=501.0,
+            capture_threshold_v=1.1,
+            r_wave_sensing_mv=8.1,
+            battery_voltage_v=2.88,
+            lead_impedance_ohms_rolling_mean_3d=500.0,
+            lead_impedance_ohms_rolling_mean_7d=499.0,
+            capture_threshold_v_rolling_mean_3d=1.05,
+            capture_threshold_v_rolling_mean_7d=1.03,
+            lead_impedance_ohms_delta_per_day_3d=0.3,
+            lead_impedance_ohms_delta_per_day_7d=0.2,
+            capture_threshold_v_delta_per_day_3d=0.02,
+            capture_threshold_v_delta_per_day_7d=0.01,
+        )
+    )
+    db.commit()
+
+    _seed_single_class_model_artifact(db, klass=0)
+
+    response = client.post(_URL_PREDICT, headers=superuser_token_headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["rows_scored"] == 1
+
+    snapshot = db.get(PatientLatestTelemetry, 55)
+    assert snapshot is not None
+    assert snapshot.fail_probability == 0.0
+
+
+def test_predict_returns_404_when_active_model_missing_but_still_upserts(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     db: Session,
@@ -479,6 +578,7 @@ def test_predict_returns_404_when_model_missing_but_still_upserts(
     r = client.post(_URL_PREDICT, headers=superuser_token_headers)
     assert r.status_code == 404
     detail = r.json()["detail"]
+    assert detail["message"] == "No active model artifact available for inference."
     assert detail["rows_upserted"] == 1
     assert detail["rows_scored"] == 0
     assert detail["model_id"] is None

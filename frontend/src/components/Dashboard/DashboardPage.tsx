@@ -2,16 +2,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Activity, BellRing, Clock4, UsersRound } from "lucide-react"
 import { useMemo, useState } from "react"
 
-import { type PacemakerTelemetryPublic, TrainingService } from "@/client"
+import {
+  DashboardService,
+  type ModelArtifactPublic,
+  ModelsService,
+  type PatientLatestTelemetryPublic,
+  PatientsService,
+  TrainingService,
+} from "@/client"
 import useCustomToast from "@/hooks/useCustomToast"
 import { handleError } from "@/utils"
 import { ActiveModelPanel } from "./ActiveModelPanel"
 import { ModelManagementPanel } from "./ModelManagementPanel"
-import {
-  MOCK_ACTIVE_MODEL,
-  MOCK_PATIENTS,
-  MOCK_RECENT_MODELS,
-} from "./mockData"
 import { PatientListTable } from "./PatientListTable"
 import { QuickStatsCards } from "./QuickStatsCards"
 import type {
@@ -21,105 +23,118 @@ import type {
   RecentModel,
 } from "./types"
 
-function deriveRiskScore(row: PacemakerTelemetryPublic): number {
-  if (typeof row.target_fail_next_7d === "number") {
-    return Math.max(0, Math.min(1, row.target_fail_next_7d))
+function getMetricValue(
+  metrics: Record<string, unknown>,
+  keys: string[],
+): number {
+  for (const key of keys) {
+    const value = metrics[key]
+    if (typeof value === "number") {
+      return value
+    }
+  }
+  return 0
+}
+
+function deriveRiskScore(row: PatientLatestTelemetryPublic): number | null {
+  if (typeof row.fail_probability === "number") {
+    return Math.max(0, Math.min(1, row.fail_probability))
   }
 
-  const leadScore = Math.min(
-    1,
-    Math.max(0, (row.lead_impedance_ohms - 1000) / 600),
-  )
-  const thresholdScore = Math.min(
-    1,
-    Math.max(0, (row.capture_threshold_v - 0.8) / 1.8),
-  )
-  const batteryScore = Math.min(
-    1,
-    Math.max(0, (3.05 - row.battery_voltage_v) / 0.55),
-  )
+  return null
+}
 
-  return Number(
-    (0.4 * leadScore + 0.4 * thresholdScore + 0.2 * batteryScore).toFixed(4),
-  )
+function toActiveModel(
+  model: ModelArtifactPublic | null | undefined,
+): ActiveModel | null {
+  if (!model) {
+    return null
+  }
+
+  const metrics = model.metrics as Record<string, unknown>
+  const datasetInfo = model.dataset_info as Record<string, unknown>
+  const datasetSizeRaw = datasetInfo.train_rows
+  const datasetSize = typeof datasetSizeRaw === "number" ? datasetSizeRaw : 0
+
+  return {
+    id: model.id,
+    version:
+      model.client_version_id ??
+      model.source_run_id ??
+      `model-${model.id.slice(0, 8)}`,
+    trainingDate:
+      model.trained_at_utc ?? model.created_at ?? new Date().toISOString(),
+    datasetSize,
+    metrics: {
+      accuracy: getMetricValue(metrics, ["accuracy", "test_accuracy"]),
+      precision: getMetricValue(metrics, ["precision", "precision_score"]),
+      recall: getMetricValue(metrics, ["recall", "recall_score"]),
+      f1: getMetricValue(metrics, ["f1", "f1_score"]),
+      oobScore: getMetricValue(metrics, ["oob_score", "oobScore"]),
+    },
+  }
+}
+
+function toRecentModel(model: ModelArtifactPublic): RecentModel {
+  const metrics = model.metrics as Record<string, unknown>
+
+  return {
+    id: model.id,
+    version:
+      model.client_version_id ??
+      model.source_run_id ??
+      `model-${model.id.slice(0, 8)}`,
+    trainingDate:
+      model.trained_at_utc ?? model.created_at ?? new Date().toISOString(),
+    f1: getMetricValue(metrics, ["f1", "f1_score"]),
+  }
 }
 
 function toPatientRows(
-  rows: PacemakerTelemetryPublic[],
+  rows: PatientLatestTelemetryPublic[],
 ): DashboardPatientRow[] {
-  const byPatient = new Map<number, PacemakerTelemetryPublic>()
-
-  rows.forEach((row) => {
-    const current = byPatient.get(row.patient_id)
-    if (!current) {
-      byPatient.set(row.patient_id, row)
-      return
-    }
-
-    if (
-      new Date(row.timestamp).getTime() > new Date(current.timestamp).getTime()
-    ) {
-      byPatient.set(row.patient_id, row)
-    }
-  })
-
-  return Array.from(byPatient.values())
+  return rows
     .map((row) => {
       const riskScore = deriveRiskScore(row)
+
       const leadImpedanceRollingMean3d =
-        row.lead_impedance_ohms_rolling_mean_3d ??
-        Number(
-          (row.lead_impedance_ohms * (1 + (riskScore - 0.5) * 0.04)).toFixed(1),
-        )
+        row.lead_impedance_ohms_rolling_mean_3d ?? row.lead_impedance_ohms
       const leadImpedanceRollingMean7d =
-        row.lead_impedance_ohms_rolling_mean_7d ??
-        Number(
-          (row.lead_impedance_ohms * (1 + (riskScore - 0.5) * 0.025)).toFixed(
-            1,
-          ),
-        )
+        row.lead_impedance_ohms_rolling_mean_7d ?? row.lead_impedance_ohms
       const captureThresholdRollingMean3d =
-        row.capture_threshold_v_rolling_mean_3d ??
-        Number(
-          (row.capture_threshold_v * (1 + (riskScore - 0.5) * 0.05)).toFixed(3),
-        )
+        row.capture_threshold_v_rolling_mean_3d ?? row.capture_threshold_v
       const captureThresholdRollingMean7d =
-        row.capture_threshold_v_rolling_mean_7d ??
-        Number(
-          (row.capture_threshold_v * (1 + (riskScore - 0.5) * 0.03)).toFixed(3),
-        )
+        row.capture_threshold_v_rolling_mean_7d ?? row.capture_threshold_v
 
       const leadImpedanceDeltaPerDay3d =
         row.lead_impedance_ohms_delta_per_day_3d ??
         Number(
           (
-            ((leadImpedanceRollingMean3d - leadImpedanceRollingMean7d) / 4) *
-            (0.85 + riskScore * 0.3)
+            (leadImpedanceRollingMean3d - leadImpedanceRollingMean7d) /
+            4
           ).toFixed(2),
         )
       const leadImpedanceDeltaPerDay7d =
         row.lead_impedance_ohms_delta_per_day_7d ??
         Number(
-          (
-            ((row.lead_impedance_ohms - leadImpedanceRollingMean7d) / 7) *
-            (0.8 + riskScore * 0.25)
-          ).toFixed(2),
+          ((row.lead_impedance_ohms - leadImpedanceRollingMean7d) / 7).toFixed(
+            2,
+          ),
         )
       const captureThresholdDeltaPerDay3d =
         row.capture_threshold_v_delta_per_day_3d ??
         Number(
           (
-            ((captureThresholdRollingMean3d - captureThresholdRollingMean7d) /
-              4) *
-            (0.85 + riskScore * 0.25)
+            (captureThresholdRollingMean3d - captureThresholdRollingMean7d) /
+            4
           ).toFixed(3),
         )
       const captureThresholdDeltaPerDay7d =
         row.capture_threshold_v_delta_per_day_7d ??
         Number(
           (
-            ((row.capture_threshold_v - captureThresholdRollingMean7d) / 7) *
-            (0.8 + riskScore * 0.2)
+            (row.capture_threshold_v - captureThresholdRollingMean7d) /
+            7
           ).toFixed(3),
         )
 
@@ -138,36 +153,29 @@ function toPatientRows(
         captureThresholdDeltaPerDay3d,
         captureThresholdDeltaPerDay7d,
         lastUpdate: row.timestamp,
-        alertsSent: riskScore >= 0.75,
+        alertsSent: (riskScore ?? 0) >= 0.75,
       }
     })
-    .sort((a, b) => b.riskScore - a.riskScore)
+    .sort((a, b) => (b.riskScore ?? -1) - (a.riskScore ?? -1))
 }
 
-function buildStats(patients: DashboardPatientRow[]): QuickStat[] {
-  const highRiskCount = patients.filter(
-    (patient) => patient.riskScore >= 0.7,
-  ).length
-  const alertsCount = patients.filter((patient) => patient.alertsSent).length
-  const lastUpdateValue =
-    patients.length === 0
-      ? "N/A"
-      : new Date(
-          patients.reduce((latest, row) => {
-            return new Date(row.lastUpdate).getTime() >
-              new Date(latest).getTime()
-              ? row.lastUpdate
-              : latest
-          }, patients[0].lastUpdate),
-        ).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        })
+function buildStats(
+  totalPatients: number,
+  highRiskCount: number,
+  alertsCount: number,
+  lastUpdate: string | null,
+): QuickStat[] {
+  const lastUpdateValue = lastUpdate
+    ? new Date(lastUpdate).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "N/A"
 
   return [
     {
       title: "Total Patients",
-      value: patients.length.toLocaleString(),
+      value: totalPatients.toLocaleString(),
       helper: "Current monitored population",
       icon: UsersRound,
     },
@@ -193,15 +201,37 @@ function buildStats(patients: DashboardPatientRow[]): QuickStat[] {
 }
 
 export function DashboardPage() {
-  const [activeModel, setActiveModel] = useState<ActiveModel>(MOCK_ACTIVE_MODEL)
-  const [recentModels] = useState<RecentModel[]>(MOCK_RECENT_MODELS)
   const [inferenceRecommended, setInferenceRecommended] = useState(false)
   const queryClient = useQueryClient()
   const { showSuccessToast, showErrorToast } = useCustomToast()
 
-  const telemetryQuery = useQuery({
-    queryKey: ["dashboard", "training-data"],
-    queryFn: () => TrainingService.downloadTrainingData({ newestLocalTs: 0 }),
+  const summaryQuery = useQuery({
+    queryKey: ["dashboard", "summary"],
+    queryFn: () => DashboardService.getDashboardSummary(),
+    staleTime: 30_000,
+  })
+
+  const modelsQuery = useQuery({
+    queryKey: ["dashboard", "models"],
+    queryFn: () => ModelsService.listModelArtifacts({ skip: 0, limit: 25 }),
+    staleTime: 30_000,
+  })
+
+  const activeModelQuery = useQuery({
+    queryKey: ["dashboard", "active-model"],
+    queryFn: () => ModelsService.getActiveModelArtifact(),
+    staleTime: 30_000,
+  })
+
+  const patientsQuery = useQuery({
+    queryKey: ["dashboard", "patients", "latest"],
+    queryFn: () =>
+      PatientsService.listLatestPatientTelemetry({
+        skip: 0,
+        limit: 1000,
+        sortBy: "risk_score",
+        sortOrder: "desc",
+      }),
     staleTime: 30_000,
   })
 
@@ -222,26 +252,73 @@ export function DashboardPage() {
         `Inference completed. ${response.rows_scored} rows scored and ${response.rows_upserted} rows refreshed.`,
       )
       setInferenceRecommended(false)
-      await queryClient.invalidateQueries({
-        queryKey: ["dashboard", "training-data"],
-      })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "models"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["dashboard", "active-model"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["dashboard", "patients", "latest"],
+        }),
+      ])
     },
     onError: handleError.bind(showErrorToast),
   })
 
-  const patients = useMemo(() => {
-    if (!telemetryQuery.data?.rows || telemetryQuery.data.rows.length === 0) {
-      return MOCK_PATIENTS
-    }
-    return toPatientRows(telemetryQuery.data.rows)
-  }, [telemetryQuery.data?.rows])
+  const deployModelMutation = useMutation({
+    mutationFn: (model: RecentModel) =>
+      ModelsService.activateModelArtifact({ modelId: model.id }),
+    onSuccess: async (_response, model) => {
+      setInferenceRecommended(true)
+      showSuccessToast(
+        `${model.version} is now active. Run inference to refresh patient risk scores.`,
+      )
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "models"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["dashboard", "active-model"],
+        }),
+      ])
+    },
+    onError: handleError.bind(showErrorToast),
+  })
 
-  const usingFallback =
-    telemetryQuery.isError ||
-    !telemetryQuery.data ||
-    telemetryQuery.data.rows.length === 0
+  const patients = useMemo(
+    () => toPatientRows(patientsQuery.data?.data ?? []),
+    [patientsQuery.data?.data],
+  )
 
-  const quickStats = useMemo(() => buildStats(patients), [patients])
+  const activeModel = useMemo(
+    () => toActiveModel(activeModelQuery.data?.data),
+    [activeModelQuery.data?.data],
+  )
+
+  const recentModels = useMemo<RecentModel[]>(
+    () => (modelsQuery.data?.data ?? []).slice(0, 3).map(toRecentModel),
+    [modelsQuery.data?.data],
+  )
+
+  const summary = summaryQuery.data
+
+  const quickStats = useMemo(
+    () =>
+      buildStats(
+        summary?.total_patients ?? patients.length,
+        summary?.high_risk_patients ??
+          patients.filter((row) => (row.riskScore ?? 0) >= 0.7).length,
+        summary?.alerts_sent ?? patients.filter((row) => row.alertsSent).length,
+        summary?.last_update ?? null,
+      ),
+    [
+      summary?.alerts_sent,
+      summary?.high_risk_patients,
+      summary?.last_update,
+      summary?.total_patients,
+      patients,
+    ],
+  )
 
   return (
     <div className="h-full min-h-0">
@@ -261,9 +338,11 @@ export function DashboardPage() {
           <section aria-label="Model management actions">
             <ModelManagementPanel
               models={recentModels}
-              activeModelId={activeModel.id}
+              activeModelId={activeModel?.id ?? ""}
               trainPending={trainModelMutation.isPending}
-              inferencePending={runInferenceMutation.isPending}
+              inferencePending={
+                runInferenceMutation.isPending || deployModelMutation.isPending
+              }
               onTrainNewModel={() => trainModelMutation.mutate()}
               onRunInference={() => runInferenceMutation.mutate()}
               onUploadModel={() => {
@@ -271,22 +350,7 @@ export function DashboardPage() {
                   "Upload flow is not yet wired in this dashboard. Use the model artifact upload endpoint workflow for now.",
                 )
               }}
-              onDeployModel={(model) => {
-                setActiveModel((previous) => ({
-                  ...previous,
-                  id: model.id,
-                  version: model.version,
-                  trainingDate: model.trainingDate,
-                  metrics: {
-                    ...previous.metrics,
-                    f1: model.f1,
-                  },
-                }))
-                setInferenceRecommended(true)
-                showSuccessToast(
-                  `${model.version} deployed locally as active model. Run inference to refresh patient risk scores.`,
-                )
-              }}
+              onDeployModel={(model) => deployModelMutation.mutate(model)}
             />
           </section>
         </div>
@@ -298,8 +362,8 @@ export function DashboardPage() {
           >
             <PatientListTable
               data={patients}
-              isLoading={telemetryQuery.isLoading}
-              usingFallback={usingFallback}
+              isLoading={patientsQuery.isLoading}
+              usingFallback={false}
             />
           </section>
         </div>

@@ -229,16 +229,16 @@ def refresh_patient_latest_predictions(
             queued_job_id=None,
         )
 
-    newest_model_statement = select(ModelArtifact).order_by(
-        ModelArtifact.created_at.desc()  # type: ignore[union-attr]
+    active_model_statement = select(ModelArtifact).where(
+        ModelArtifact.is_active == True  # noqa: E712
     )
-    newest_model = session.exec(newest_model_statement).first()
+    active_model = session.exec(active_model_statement).first()
 
-    if newest_model is None:
+    if active_model is None:
         raise HTTPException(
             status_code=404,
             detail={
-                "message": "No model artifacts available for inference.",
+                "message": "No active model artifact available for inference.",
                 "rows_upserted": rows_upserted,
                 "rows_scored": 0,
                 "model_id": None,
@@ -254,7 +254,7 @@ def refresh_patient_latest_predictions(
         return TrainingPredictSummary(
             rows_upserted=rows_upserted,
             rows_scored=0,
-            model_id=newest_model.id,
+            model_id=active_model.id,
             queued_job_id=None,
         )
 
@@ -286,9 +286,35 @@ def refresh_patient_latest_predictions(
 
         rows_for_matrix.append(normalized_feature_values)
 
-    model = joblib.load(BytesIO(newest_model.model_blob))
+    model = joblib.load(BytesIO(active_model.model_blob))
     feature_matrix = np.asarray(rows_for_matrix, dtype=np.float64)
-    probabilities = model.predict_proba(feature_matrix)[:, 1]
+    probability_matrix = np.asarray(
+        model.predict_proba(feature_matrix), dtype=np.float64
+    )
+    model_classes = np.asarray(getattr(model, "classes_", []))
+
+    if probability_matrix.ndim != 2 or probability_matrix.shape[1] == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Active model does not expose usable probability outputs.",
+        )
+
+    if probability_matrix.shape[1] == 1:
+        if model_classes.size != 1:
+            raise HTTPException(
+                status_code=422,
+                detail="Single-column probability output has invalid class metadata.",
+            )
+        positive_probability = 1.0 if float(model_classes[0]) == 1.0 else 0.0
+        probabilities = np.full(len(snapshots), positive_probability, dtype=np.float64)
+    else:
+        positive_class_indexes = np.where(model_classes == 1)[0]
+        if positive_class_indexes.size == 0:
+            raise HTTPException(
+                status_code=422,
+                detail="Active model does not include class label 1 probabilities.",
+            )
+        probabilities = probability_matrix[:, int(positive_class_indexes[0])]
 
     for snapshot, probability in zip(snapshots, probabilities, strict=True):
         snapshot.fail_probability = float(probability)
@@ -299,7 +325,7 @@ def refresh_patient_latest_predictions(
     return TrainingPredictSummary(
         rows_upserted=rows_upserted,
         rows_scored=len(snapshots),
-        model_id=newest_model.id,
+        model_id=active_model.id,
         queued_job_id=None,
     )
 

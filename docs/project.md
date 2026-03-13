@@ -134,6 +134,8 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 - Primary ingest contract for the demo is a superuser-protected bulk POST endpoint (`/api/v1/telemetry/ingest`) that accepts a JSON array payload (typical daily batch up to ~1000 rows, max 2000 rows/request).
 - Primary model-upload contract for the demo is a superuser-protected POST endpoint (`/api/v1/models/upload`) that accepts `multipart/form-data` with `model_file` (binary artifact, typical ~20-30 MB) and `metadata_json` (run metadata + metrics).
 - Training-sync endpoints (`/api/v1/training/poll`, `/api/v1/training/download`, `/api/v1/training/request`, `/api/v1/training/claim`, `/api/v1/training/{job_id}/complete`) allow the frontend to request jobs and the local compute worker to claim, execute, and complete jobs safely. A separate snapshot scoring endpoint (`/api/v1/training/predict`) refreshes a one-row-per-patient latest telemetry table and fail probabilities for dashboard views. See [training-sync-endpoints.md](training-sync-endpoints.md).
+- Dashboard read contracts include `GET /api/v1/patients/latest` (latest telemetry per patient with nullable prediction score before inference), `GET /api/v1/dashboard/summary` (quick stats + active model summary), `GET /api/v1/models`, and `GET /api/v1/models/active`.
+- Model selection contract includes `POST /api/v1/models/{model_id}/activate`; upload contract auto-activates the newest uploaded model.
 - Batch size is variable: smaller batches are expected when some simulated patient devices stop reporting (for example due to failure events).
 - Each row requires `patient_id`, Unix-epoch `timestamp` (seconds, UTC), `lead_impedance_ohms`, `capture_threshold_v`, `r_wave_sensing_mv`, and `battery_voltage_v`; engineered features and `target_fail_next_7d` are optional.
 - Duplicate rows (same `patient_id` + `timestamp`) are rejected and reported in the ingestion response summary.
@@ -317,9 +319,10 @@ The goal is **not** to create a clinically validated product. The goal is to dem
 3. Training is requested by UI action or schedule, which triggers Azure DevOps pipeline run.
 4. Azure DevOps queues the training job to the local self-hosted agent.
 5. Local agent polls for pending jobs, claims the newest job, downloads mature rows via `GET /api/v1/training/download`, updates its local training cache, trains/evaluates the model, uploads artifacts/metrics, and marks the job complete.
-6. Candidate model is registered; active model is updated only if promotion gates pass.
-7. Predictions refresh dashboard risk views using the active model.
-8. High-risk predictions trigger email alert.
+6. Inference endpoint `POST /api/v1/training/predict` scores using the active model artifact. If no active model exists, snapshot rows are still refreshed and the endpoint returns a no-active-model `404` summary payload for UI handling.
+7. Candidate model is registered; active model is updated only if promotion gates pass.
+8. Predictions refresh dashboard risk views using the active model.
+9. High-risk predictions trigger email alert.
 
 ---
 

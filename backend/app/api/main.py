@@ -1,9 +1,11 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    dashboard,
     items,
     login,
     model_artifacts,
+    patients,
     private,
     telemetry,
     training,
@@ -20,6 +22,8 @@ api_router.include_router(items.router)
 api_router.include_router(telemetry.router)
 api_router.include_router(model_artifacts.router)
 api_router.include_router(training.router)
+api_router.include_router(patients.router)
+api_router.include_router(dashboard.router)
 
 
 if settings.ENVIRONMENT == "local":

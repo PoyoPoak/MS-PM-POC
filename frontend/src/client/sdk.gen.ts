@@ -3,7 +3,21 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, ModelsUploadModelArtifactData, ModelsUploadModelArtifactResponse, PrivateCreateUserData, PrivateCreateUserResponse, TelemetryIngestTelemetryBulkData, TelemetryIngestTelemetryBulkResponse, TrainingPollTrainingJobResponse, TrainingDownloadTrainingDataData, TrainingDownloadTrainingDataResponse, TrainingCreateTrainingJobRequestResponse, TrainingRefreshPatientLatestPredictionsResponse, TrainingClaimTrainingJobResponse, TrainingCompleteTrainingJobData, TrainingCompleteTrainingJobResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { DashboardGetDashboardSummaryResponse, ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, ModelsListModelArtifactsData, ModelsListModelArtifactsResponse, ModelsGetActiveModelArtifactResponse, ModelsGetModelArtifactData, ModelsGetModelArtifactResponse, ModelsActivateModelArtifactData, ModelsActivateModelArtifactResponse, ModelsUploadModelArtifactData, ModelsUploadModelArtifactResponse, PatientsListLatestPatientTelemetryData, PatientsListLatestPatientTelemetryResponse, PrivateCreateUserData, PrivateCreateUserResponse, TelemetryIngestTelemetryBulkData, TelemetryIngestTelemetryBulkResponse, TrainingPollTrainingJobResponse, TrainingDownloadTrainingDataData, TrainingDownloadTrainingDataResponse, TrainingCreateTrainingJobRequestResponse, TrainingRefreshPatientLatestPredictionsResponse, TrainingClaimTrainingJobResponse, TrainingCompleteTrainingJobData, TrainingCompleteTrainingJobResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+
+export class DashboardService {
+    /**
+     * Get Dashboard Summary
+     * @returns DashboardSummary Successful Response
+     * @throws ApiError
+     */
+    public static getDashboardSummary(): CancelablePromise<DashboardGetDashboardSummaryResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/dashboard/summary'
+        });
+    }
+}
 
 export class ItemsService {
     /**
@@ -215,6 +229,80 @@ export class LoginService {
 
 export class ModelsService {
     /**
+     * List Model Artifacts
+     * @param data The data for the request.
+     * @param data.skip
+     * @param data.limit
+     * @returns ModelArtifactsPublic Successful Response
+     * @throws ApiError
+     */
+    public static listModelArtifacts(data: ModelsListModelArtifactsData = {}): CancelablePromise<ModelsListModelArtifactsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/models',
+            query: {
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Get Active Model Artifact
+     * @returns ActiveModelPublicResponse Successful Response
+     * @throws ApiError
+     */
+    public static getActiveModelArtifact(): CancelablePromise<ModelsGetActiveModelArtifactResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/models/active'
+        });
+    }
+    
+    /**
+     * Get Model Artifact
+     * @param data The data for the request.
+     * @param data.modelId
+     * @returns ModelArtifactPublic Successful Response
+     * @throws ApiError
+     */
+    public static getModelArtifact(data: ModelsGetModelArtifactData): CancelablePromise<ModelsGetModelArtifactResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/models/{model_id}',
+            path: {
+                model_id: data.modelId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Activate Model Artifact
+     * @param data The data for the request.
+     * @param data.modelId
+     * @returns ModelArtifactPublic Successful Response
+     * @throws ApiError
+     */
+    public static activateModelArtifact(data: ModelsActivateModelArtifactData): CancelablePromise<ModelsActivateModelArtifactResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/models/{model_id}/activate',
+            path: {
+                model_id: data.modelId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
      * Upload Model Artifact
      * Upload a trained model artifact with metrics and persist to PostgreSQL.
      *
@@ -231,6 +319,40 @@ export class ModelsService {
             url: '/api/v1/models/upload',
             formData: data.formData,
             mediaType: 'multipart/form-data',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class PatientsService {
+    /**
+     * List Latest Patient Telemetry
+     * @param data The data for the request.
+     * @param data.skip
+     * @param data.limit
+     * @param data.sortBy
+     * @param data.sortOrder
+     * @param data.patientSearch
+     * @param data.riskFilter
+     * @param data.alertFilter
+     * @returns PatientLatestTelemetryPublicList Successful Response
+     * @throws ApiError
+     */
+    public static listLatestPatientTelemetry(data: PatientsListLatestPatientTelemetryData = {}): CancelablePromise<PatientsListLatestPatientTelemetryResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/patients/latest',
+            query: {
+                skip: data.skip,
+                limit: data.limit,
+                sort_by: data.sortBy,
+                sort_order: data.sortOrder,
+                patient_search: data.patientSearch,
+                risk_filter: data.riskFilter,
+                alert_filter: data.alertFilter
+            },
             errors: {
                 422: 'Validation Error'
             }

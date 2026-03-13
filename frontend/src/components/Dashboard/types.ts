@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react"
 
 export type DashboardPatientRow = {
   patientId: number
-  riskScore: number
+  riskScore: number | null
   leadImpedance: number
   captureThreshold: number
   batteryVoltage: number
