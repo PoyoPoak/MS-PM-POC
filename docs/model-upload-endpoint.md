@@ -9,6 +9,14 @@ This document defines how trained model artifacts and evaluation metrics are upl
 - **Auth:** superuser token required
 - **Content-Type:** `multipart/form-data`
 - **Purpose:** persist a trained model artifact (`model_file`) and model run metadata/metrics (`metadata_json`) as one atomic backend write
+- **Activation behavior:** newly uploaded model is auto-activated and previously active model(s) are set inactive
+
+## Related Model Management Endpoints
+
+- `GET /api/v1/models` — list model metadata (paginated)
+- `GET /api/v1/models/active` — fetch active model metadata (nullable when none)
+- `GET /api/v1/models/{model_id}` — fetch one model metadata record
+- `POST /api/v1/models/{model_id}/activate` — manually activate a selected model
 
 ## How to Get a Superuser Token
 
@@ -133,6 +141,7 @@ Successful response returns metadata summary and does not return the binary mode
   "client_version_id": "20260301_120000",
   "source_run_id": "ado-run-1842",
   "algorithm": "RandomForestClassifier",
+  "is_active": true,
   "model_size_bytes": 24518733,
   "model_sha256": "e5f9b0b0f594bcf8f5939e89995c8239f399f745f4efd9e7a2f4d0f5ca6ecf07",
   "content_type": "application/octet-stream"
@@ -159,6 +168,7 @@ Models are persisted to `model_artifact` table with:
 - `metrics` (`JSON`)
 - `dataset_info` (`JSON`)
 - `notes`
+- `is_active` (`boolean`, indexed)
 - `content_type`
 - `model_size_bytes`
 - `model_sha256`

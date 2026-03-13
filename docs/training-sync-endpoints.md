@@ -236,15 +236,16 @@ curl -s -X POST "http://localhost:8000/api/v1/training/claim" \
 
 ### 5. `POST /api/v1/training/predict`
 
-Refresh the dashboard snapshot table by selecting the newest telemetry row per patient, upserting one row per `patient_id`, and (when a model exists) scoring fail probabilities using the newest uploaded model artifact.
+Refresh the dashboard snapshot table by selecting the newest telemetry row per patient, upserting one row per `patient_id`, and (when an active model exists) scoring fail probabilities using the active model artifact.
 
 #### Behavior Summary
 
 1. Select newest telemetry row per `patient_id`.
 2. Upsert those rows into `patient_latest_telemetry` (one row per patient).
-3. Load newest model artifact (`model_artifact.created_at DESC`) and score fail probability.
+3. Load active model artifact (`model_artifact.is_active = true`) and score fail probability.
 4. Update `patient_latest_telemetry.fail_probability`.
-5. If no model exists, return `404` with a summary payload in `detail` **after** snapshot upsert.
+5. If no active model exists, return `404` with a summary payload in `detail` **after** snapshot upsert.
+6. If a model is single-class (for example trained on only label `0` or only label `1`), inference is handled safely without indexing errors.
 
 #### Request
 
@@ -270,15 +271,16 @@ Refresh the dashboard snapshot table by selecting the newest telemetry row per p
 |---|---|---|
 | `rows_upserted` | `int` | Number of patient snapshot rows created/updated from newest telemetry |
 | `rows_scored` | `int` | Number of rows scored with model inference |
-| `model_id` | `uuid \| null` | Newest model artifact ID used for inference |
+| `model_id` | `uuid \| null` | Active model artifact ID used for inference |
 | `queued_job_id` | `uuid \| null` | Reserved for compatibility; currently always `null` |
 
 #### Error Responses
 
 | Status | Condition |
 |---|---|
-| `404 Not Found` | No model artifact exists; snapshot upsert still runs |
+| `404 Not Found` | No active model artifact exists; snapshot upsert still runs |
 | `422 Unprocessable Entity` | Snapshot rows contain missing model feature values |
+| `422 Unprocessable Entity` | Model probability output cannot be mapped to class `1` |
 
 #### Example
 
@@ -477,7 +479,7 @@ Expected shape:
 ```json
 {
   "detail": {
-    "message": "No model artifacts available for inference.",
+    "message": "No active model artifact available for inference.",
     "rows_upserted": 1000,
     "rows_scored": 0,
     "model_id": null,
@@ -486,9 +488,9 @@ Expected shape:
 }
 ```
 
-#### B) Upload a model artifact
+#### B) Upload and activate a model artifact
 
-Upload any valid trained model artifact via [model-upload-endpoint.md](model-upload-endpoint.md) (for example using the documented `curl` with `model_file` + `metadata_json`).
+Upload any valid trained model artifact via [model-upload-endpoint.md](model-upload-endpoint.md) (for example using the documented `curl` with `model_file` + `metadata_json`). Upload auto-activates the newest model.
 
 #### C) Happy path (expected `200` with scored rows)
 
