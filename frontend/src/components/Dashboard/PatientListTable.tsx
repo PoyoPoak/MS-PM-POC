@@ -47,8 +47,8 @@ type RiskFilter = "all" | "high" | "medium" | "low"
 type AlertFilter = "all" | "sent" | "none"
 
 const RISK_THRESHOLDS = {
-  high: 0.7,
-  medium: 0.4,
+  high: 0.01,
+  medium: 0.00001,
 }
 
 function formatTimestamp(value: string) {
@@ -80,14 +80,14 @@ function getRiskLabel(riskScore: number | null) {
     }
   }
 
-  if (riskScore >= RISK_THRESHOLDS.high) {
+  if (riskScore > RISK_THRESHOLDS.high) {
     return {
       label: "High",
       className: "bg-red-100 text-red-900 border-red-200",
     }
   }
 
-  if (riskScore >= RISK_THRESHOLDS.medium) {
+  if (riskScore > RISK_THRESHOLDS.medium) {
     return {
       label: "Medium",
       className: "bg-amber-100 text-amber-900 border-amber-200",
@@ -182,13 +182,13 @@ export function PatientListTable({
         riskFilter === "all" ||
         (riskFilter === "high" &&
           row.riskScore !== null &&
-          row.riskScore >= RISK_THRESHOLDS.high) ||
+          row.riskScore > RISK_THRESHOLDS.high) ||
         (riskFilter === "medium" &&
           row.riskScore !== null &&
-          row.riskScore >= RISK_THRESHOLDS.medium &&
-          row.riskScore < RISK_THRESHOLDS.high) ||
+          row.riskScore > RISK_THRESHOLDS.medium &&
+          row.riskScore <= RISK_THRESHOLDS.high) ||
         (riskFilter === "low" &&
-          (row.riskScore === null || row.riskScore < RISK_THRESHOLDS.medium))
+          (row.riskScore === null || row.riskScore <= RISK_THRESHOLDS.medium))
 
       const alertMatch =
         alertFilter === "all" ||
