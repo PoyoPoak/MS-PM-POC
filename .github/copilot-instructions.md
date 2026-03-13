@@ -138,6 +138,8 @@ If you modify `backend/app/api/`, `backend/app/models.py`, or any backend route/
 
 When implementation changes are made, update documentation in the same work item when appropriate.
 
+Canonical map for where agent-facing knowledge belongs: `docs/agent-documentation-system.md`.
+
 - **Class/major function/component changes**: update or create the corresponding instruction file in `.github/instructions/` when behavior, inputs/outputs, contracts, or usage expectations change.
 - **Feature/workflow/API/data model changes**: update impacted docs under `docs/` (for example `docs/project.md`, `docs/pacemaker-telemetry.md`, `docs/development.md`, `docs/ml-engine.md`).
 - **Definition of done**: do not treat implementation-only changes as complete until relevant `.github/instructions` and/or `docs` updates are included.
