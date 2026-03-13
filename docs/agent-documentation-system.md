@@ -56,3 +56,9 @@ Current checks:
 3. Move policy to instructions, workflow to skills, domain truth to docs.
 4. Remove temporary notes after the corresponding pull request is merged.
 5. Keep only this architecture file as the meta index for the system.
+
+## Current Scoped Instruction Coverage
+
+- `.github/instructions/ml_engine.py-instructions.md` -> `backend/util/ml_engine.py`
+- `.github/instructions/telemetry-live-replay.md-instructions.md` -> `docs/telemetry-live-replay.md`
+- `.github/instructions/local-training-listener.md-instructions.md` -> `docs/local-training-listener.md`
