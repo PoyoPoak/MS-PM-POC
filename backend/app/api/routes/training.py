@@ -23,6 +23,8 @@ from app.models import (
     PacemakerTelemetry,
     PacemakerTelemetryPublic,
     PatientLatestTelemetry,
+    PatientRiskRowPublic,
+    PatientRiskRowsPublic,
     TrainingDataDownloadResult,
     TrainingJobRequest,
     TrainingJobRequestPublic,
@@ -47,6 +49,14 @@ _PREDICT_FEATURE_COLUMNS: list[str] = [
     "capture_threshold_v_delta_per_day_3d",
     "capture_threshold_v_delta_per_day_7d",
 ]
+
+
+def _risk_level(score: float) -> str:
+    if score >= 0.8:
+        return "HIGH"
+    if score >= 0.6:
+        return "MED"
+    return "LOW"
 
 
 @router.get("/poll")
@@ -301,6 +311,62 @@ def refresh_patient_latest_predictions(
         rows_scored=len(snapshots),
         model_id=newest_model.id,
         queued_job_id=None,
+    )
+
+
+@router.get("/risk", response_model=PatientRiskRowsPublic)
+def read_at_risk_patients(
+    *,
+    session: SessionDep,
+    _current_superuser: User = Depends(get_current_active_superuser),
+    skip: int = 0,
+    limit: int = 50,
+    search: str | None = Query(default=None),
+    min_risk: float = Query(default=0.0, ge=0.0, le=1.0),
+) -> Any:
+    statement = (
+        select(PatientLatestTelemetry)
+        .where(PatientLatestTelemetry.fail_probability.is_not(None))  # type: ignore[union-attr]
+        .order_by(PatientLatestTelemetry.fail_probability.desc())  # type: ignore[union-attr]
+    )
+    snapshots = list(session.exec(statement).all())
+
+    filtered_rows: list[PatientLatestTelemetry] = []
+    normalized_search = search.lower().strip() if search else None
+    for snapshot in snapshots:
+        score = float(snapshot.fail_probability or 0.0)
+        if score < min_risk:
+            continue
+
+        if normalized_search is not None:
+            patient_label = f"pat-{snapshot.patient_id}".lower()
+            if normalized_search not in patient_label and normalized_search not in str(
+                snapshot.patient_id
+            ):
+                continue
+
+        filtered_rows.append(snapshot)
+
+    paginated_rows = filtered_rows[skip : skip + limit]
+    payload_rows = [
+        PatientRiskRowPublic(
+            patient_id=row.patient_id,
+            timestamp=row.timestamp,
+            fail_probability=float(row.fail_probability or 0.0),
+            risk_level=_risk_level(float(row.fail_probability or 0.0)),
+            battery_voltage_v=row.battery_voltage_v,
+            lead_impedance_ohms=row.lead_impedance_ohms,
+            capture_threshold_v=row.capture_threshold_v,
+        )
+        for row in paginated_rows
+    ]
+
+    latest_timestamp = max((row.timestamp for row in filtered_rows), default=None)
+
+    return PatientRiskRowsPublic(
+        data=payload_rows,
+        count=len(filtered_rows),
+        refreshed_at=latest_timestamp,
     )
 
 

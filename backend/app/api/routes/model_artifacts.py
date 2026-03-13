@@ -1,13 +1,18 @@
 import hashlib
 import json
+import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import ValidationError
+from sqlmodel import select
 
 from app.api.deps import SessionDep, get_current_active_superuser
 from app.models import (
+    Message,
     ModelArtifact,
+    ModelArtifactPublic,
+    ModelArtifactsPublic,
     ModelArtifactUploadMetadata,
     ModelArtifactUploadResponse,
     User,
@@ -16,6 +21,33 @@ from app.models import (
 _MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 
 router = APIRouter(prefix="/models", tags=["models"])
+
+
+def _is_active_model(model: ModelArtifact) -> bool:
+    return bool(model.dataset_info.get("is_active", False))
+
+
+def _to_model_public(model: ModelArtifact, *, is_active: bool) -> ModelArtifactPublic:
+    return ModelArtifactPublic(
+        id=model.id,
+        created_at=model.created_at,
+        client_version_id=model.client_version_id,
+        source_run_id=model.source_run_id,
+        trained_at_utc=model.trained_at_utc,
+        algorithm=model.algorithm,
+        metrics=model.metrics,
+        dataset_info=model.dataset_info,
+        is_active=is_active,
+    )
+
+
+def _resolve_active_model_id(models: list[ModelArtifact]) -> uuid.UUID | None:
+    active_model = next((model for model in models if _is_active_model(model)), None)
+    if active_model is not None:
+        return active_model.id
+    if not models:
+        return None
+    return models[0].id
 
 
 @router.post("/upload", response_model=ModelArtifactUploadResponse)
@@ -95,3 +127,93 @@ def upload_model_artifact(
         model_sha256=db_model_artifact.model_sha256,
         content_type=db_model_artifact.content_type,
     )
+
+
+@router.get("/", response_model=ModelArtifactsPublic)
+def read_model_artifacts(
+    *,
+    session: SessionDep,
+    _current_superuser: User = Depends(get_current_active_superuser),
+    skip: int = 0,
+    limit: int = 100,
+) -> Any:
+    ordered_models = list(
+        session.exec(
+            select(ModelArtifact).order_by(ModelArtifact.created_at.desc())  # type: ignore[union-attr]
+        ).all()
+    )
+    active_model_id = _resolve_active_model_id(ordered_models)
+    sliced_models = ordered_models[skip : skip + limit]
+
+    return ModelArtifactsPublic(
+        data=[
+            _to_model_public(model, is_active=model.id == active_model_id)
+            for model in sliced_models
+        ],
+        count=len(ordered_models),
+    )
+
+
+@router.get("/active", response_model=ModelArtifactPublic)
+def read_active_model_artifact(
+    *,
+    session: SessionDep,
+    _current_superuser: User = Depends(get_current_active_superuser),
+) -> Any:
+    ordered_models = list(
+        session.exec(
+            select(ModelArtifact).order_by(ModelArtifact.created_at.desc())  # type: ignore[union-attr]
+        ).all()
+    )
+    active_model_id = _resolve_active_model_id(ordered_models)
+    if active_model_id is None:
+        raise HTTPException(status_code=404, detail="No model artifacts found.")
+
+    active_model = next(
+        model for model in ordered_models if model.id == active_model_id
+    )
+    return _to_model_public(active_model, is_active=True)
+
+
+@router.post("/{model_id}/activate", response_model=ModelArtifactPublic)
+def activate_model_artifact(
+    *,
+    session: SessionDep,
+    model_id: uuid.UUID,
+    _current_superuser: User = Depends(get_current_active_superuser),
+) -> Any:
+    ordered_models = list(session.exec(select(ModelArtifact)).all())
+    target_model = next(
+        (model for model in ordered_models if model.id == model_id), None
+    )
+    if target_model is None:
+        raise HTTPException(status_code=404, detail="Model artifact not found.")
+
+    for model in ordered_models:
+        dataset_info = dict(model.dataset_info)
+        if model.id == model_id:
+            dataset_info["is_active"] = True
+        else:
+            dataset_info.pop("is_active", None)
+        model.dataset_info = dataset_info
+        session.add(model)
+
+    session.commit()
+    session.refresh(target_model)
+    return _to_model_public(target_model, is_active=True)
+
+
+@router.delete("/{model_id}", response_model=Message)
+def delete_model_artifact(
+    *,
+    session: SessionDep,
+    model_id: uuid.UUID,
+    _current_superuser: User = Depends(get_current_active_superuser),
+) -> Any:
+    model = session.get(ModelArtifact, model_id)
+    if model is None:
+        raise HTTPException(status_code=404, detail="Model artifact not found.")
+
+    session.delete(model)
+    session.commit()
+    return Message(message="Model artifact deleted successfully")

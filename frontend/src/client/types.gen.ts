@@ -45,6 +45,27 @@ export type Message = {
     message: string;
 };
 
+export type ModelArtifactPublic = {
+    id: string;
+    created_at?: (string | null);
+    client_version_id?: (string | null);
+    source_run_id?: (string | null);
+    trained_at_utc?: (string | null);
+    algorithm: string;
+    metrics: {
+        [key: string]: unknown;
+    };
+    dataset_info: {
+        [key: string]: unknown;
+    };
+    is_active?: boolean;
+};
+
+export type ModelArtifactsPublic = {
+    data: Array<ModelArtifactPublic>;
+    count: number;
+};
+
 export type ModelArtifactUploadResponse = {
     id: string;
     created_at?: (string | null);
@@ -110,6 +131,22 @@ export type PacemakerTelemetryPublic = {
     lead_impedance_ohms_delta_per_day_7d?: (number | null);
     capture_threshold_v_delta_per_day_3d?: (number | null);
     capture_threshold_v_delta_per_day_7d?: (number | null);
+};
+
+export type PatientRiskRowPublic = {
+    patient_id: number;
+    timestamp: string;
+    fail_probability: number;
+    risk_level: string;
+    battery_voltage_v: number;
+    lead_impedance_ohms: number;
+    capture_threshold_v: number;
+};
+
+export type PatientRiskRowsPublic = {
+    data: Array<PatientRiskRowPublic>;
+    count: number;
+    refreshed_at?: (string | null);
 };
 
 export type PrivateUserCreate = {
@@ -275,6 +312,27 @@ export type ModelsUploadModelArtifactData = {
 
 export type ModelsUploadModelArtifactResponse = (ModelArtifactUploadResponse);
 
+export type ModelsReadModelArtifactsData = {
+    limit?: number;
+    skip?: number;
+};
+
+export type ModelsReadModelArtifactsResponse = (ModelArtifactsPublic);
+
+export type ModelsReadActiveModelArtifactResponse = (ModelArtifactPublic);
+
+export type ModelsActivateModelArtifactData = {
+    modelId: string;
+};
+
+export type ModelsActivateModelArtifactResponse = (ModelArtifactPublic);
+
+export type ModelsDeleteModelArtifactData = {
+    modelId: string;
+};
+
+export type ModelsDeleteModelArtifactResponse = (Message);
+
 export type PrivateCreateUserData = {
     requestBody: PrivateUserCreate;
 };
@@ -301,6 +359,15 @@ export type TrainingDownloadTrainingDataResponse = (TrainingDataDownloadResult);
 export type TrainingCreateTrainingJobRequestResponse = (TrainingJobRequestPublic);
 
 export type TrainingRefreshPatientLatestPredictionsResponse = (TrainingPredictSummary);
+
+export type TrainingReadAtRiskPatientsData = {
+    limit?: number;
+    minRisk?: number;
+    search?: (string | null);
+    skip?: number;
+};
+
+export type TrainingReadAtRiskPatientsResponse = (PatientRiskRowsPublic);
 
 export type TrainingClaimTrainingJobResponse = (TrainingJobRequestPublic);
 
