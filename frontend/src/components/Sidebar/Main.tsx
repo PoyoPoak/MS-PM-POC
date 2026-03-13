@@ -14,6 +14,7 @@ export type Item = {
   icon: LucideIcon
   title: string
   path: string
+  disabled?: boolean
 }
 
 interface MainProps {
@@ -40,16 +41,26 @@ export function Main({ items }: MainProps) {
 
             return (
               <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton
-                  tooltip={item.title}
-                  isActive={isActive}
-                  asChild
-                >
-                  <RouterLink to={item.path} onClick={handleMenuClick}>
+                {item.disabled ? (
+                  <SidebarMenuButton
+                    tooltip={`${item.title} (coming soon)`}
+                    disabled
+                  >
                     <item.icon />
                     <span>{item.title}</span>
-                  </RouterLink>
-                </SidebarMenuButton>
+                  </SidebarMenuButton>
+                ) : (
+                  <SidebarMenuButton
+                    tooltip={item.title}
+                    isActive={isActive}
+                    asChild
+                  >
+                    <RouterLink to={item.path} onClick={handleMenuClick}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </RouterLink>
+                  </SidebarMenuButton>
+                )}
               </SidebarMenuItem>
             )
           })}
