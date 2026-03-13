@@ -137,4 +137,4 @@ function buildPatientRow(patientId: number): DashboardPatientRow {
 export const MOCK_PATIENTS: DashboardPatientRow[] = Array.from(
   { length: PATIENT_COUNT },
   (_, index) => buildPatientRow(PATIENT_ID_START + index),
-).sort((left, right) => right.riskScore - left.riskScore)
+).sort((left, right) => (right.riskScore ?? -1) - (left.riskScore ?? -1))

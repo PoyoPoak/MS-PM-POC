@@ -227,6 +227,15 @@ class TrainingPredictSummary(SQLModel):
     queued_job_id: uuid.UUID | None = None
 
 
+class PatientLatestTelemetryPublic(PatientLatestTelemetryBase):
+    created_at: datetime | None = None
+
+
+class PatientLatestTelemetryPublicList(SQLModel):
+    data: list[PatientLatestTelemetryPublic]
+    count: int
+
+
 class TrainingDataDownloadResult(SQLModel):
     """Response envelope for GET /training/download."""
 
@@ -315,10 +324,37 @@ class ModelArtifact(SQLModel, table=True):
     metrics: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     dataset_info: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     notes: str | None = Field(default=None, max_length=2000)
+    is_active: bool = Field(default=False, index=True)
     content_type: str | None = Field(default=None, max_length=255)
     model_size_bytes: int
     model_sha256: str = Field(min_length=64, max_length=64, index=True)
     model_blob: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+
+
+class ModelArtifactPublic(SQLModel):
+    id: uuid.UUID
+    created_at: datetime | None = None
+    client_version_id: str | None = None
+    source_run_id: str | None = None
+    trained_at_utc: datetime | None = None
+    algorithm: str
+    hyperparameters: dict[str, Any]
+    metrics: dict[str, Any]
+    dataset_info: dict[str, Any]
+    notes: str | None = None
+    is_active: bool
+    content_type: str | None = None
+    model_size_bytes: int
+    model_sha256: str
+
+
+class ModelArtifactsPublic(SQLModel):
+    data: list[ModelArtifactPublic]
+    count: int
+
+
+class ActiveModelPublicResponse(SQLModel):
+    data: ModelArtifactPublic | None
 
 
 class ModelArtifactUploadResponse(SQLModel):
@@ -327,9 +363,18 @@ class ModelArtifactUploadResponse(SQLModel):
     client_version_id: str | None = None
     source_run_id: str | None = None
     algorithm: str
+    is_active: bool
     model_size_bytes: int
     model_sha256: str
     content_type: str | None = None
+
+
+class DashboardSummary(SQLModel):
+    total_patients: int
+    high_risk_patients: int
+    alerts_sent: int
+    last_update: datetime | None = None
+    active_model: ModelArtifactPublic | None = None
 
 
 # Generic message

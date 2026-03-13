@@ -10,7 +10,7 @@ import {
 import type { ActiveModel } from "./types"
 
 interface ActiveModelPanelProps {
-  model: ActiveModel
+  model: ActiveModel | null
   inferenceRecommended: boolean
 }
 
@@ -27,6 +27,31 @@ function formatMetric(value: number) {
 }
 
 export function ActiveModelPanel({ model }: ActiveModelPanelProps) {
+  if (!model) {
+    return (
+      <Card className="gap-4 border-primary/15 bg-linear-to-b from-card to-card/95 py-5">
+        <CardHeader className="gap-1 border-b pb-4">
+          <div className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BrainCircuit className="size-4 text-primary" />
+              Active Model
+            </CardTitle>
+          </div>
+          <CardDescription>
+            Current production model performance
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            No active model is available yet. Trigger training to create and
+            auto-activate the first model.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   const metrics = [
     { label: "Accuracy", value: model.metrics.accuracy },
     { label: "Precision", value: model.metrics.precision },
@@ -35,7 +60,7 @@ export function ActiveModelPanel({ model }: ActiveModelPanelProps) {
   ]
 
   return (
-    <Card className="gap-4 border-primary/15 bg-gradient-to-b from-card to-card/95 py-5">
+    <Card className="gap-4 border-primary/15 bg-linear-to-b from-card to-card/95 py-5">
       <CardHeader className="gap-1 border-b pb-4">
         <div className="flex items-center gap-2">
           <CardTitle className="flex items-center gap-2 text-base">

@@ -66,7 +66,14 @@ function formatRelative(value: string) {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-function getRiskLabel(riskScore: number) {
+function getRiskLabel(riskScore: number | null) {
+  if (riskScore === null) {
+    return {
+      label: "Unscored",
+      className: "bg-zinc-100 text-zinc-800 border-zinc-200",
+    }
+  }
+
   if (riskScore >= RISK_THRESHOLDS.high) {
     return {
       label: "High",
@@ -167,11 +174,15 @@ export function PatientListTable({
 
       const riskMatch =
         riskFilter === "all" ||
-        (riskFilter === "high" && row.riskScore >= RISK_THRESHOLDS.high) ||
+        (riskFilter === "high" &&
+          row.riskScore !== null &&
+          row.riskScore >= RISK_THRESHOLDS.high) ||
         (riskFilter === "medium" &&
+          row.riskScore !== null &&
           row.riskScore >= RISK_THRESHOLDS.medium &&
           row.riskScore < RISK_THRESHOLDS.high) ||
-        (riskFilter === "low" && row.riskScore < RISK_THRESHOLDS.medium)
+        (riskFilter === "low" &&
+          (row.riskScore === null || row.riskScore < RISK_THRESHOLDS.medium))
 
       const alertMatch =
         alertFilter === "all" ||
@@ -212,7 +223,9 @@ export function PatientListTable({
           return (
             <div className="flex items-center gap-2">
               <span className="font-semibold tabular-nums">
-                {(row.original.riskScore * 100).toFixed(1)}%
+                {row.original.riskScore === null
+                  ? "--"
+                  : `${(row.original.riskScore * 100).toFixed(1)}%`}
               </span>
               <span
                 className={cn(

@@ -1,13 +1,18 @@
 import hashlib
 import json
+import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import ValidationError
+from sqlmodel import func, select, update
 
 from app.api.deps import SessionDep, get_current_active_superuser
 from app.models import (
+    ActiveModelPublicResponse,
     ModelArtifact,
+    ModelArtifactPublic,
+    ModelArtifactsPublic,
     ModelArtifactUploadMetadata,
     ModelArtifactUploadResponse,
     User,
@@ -16,6 +21,96 @@ from app.models import (
 _MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 
 router = APIRouter(prefix="/models", tags=["models"])
+
+
+def _to_model_artifact_public(model: ModelArtifact) -> ModelArtifactPublic:
+    return ModelArtifactPublic(
+        id=model.id,
+        created_at=model.created_at,
+        client_version_id=model.client_version_id,
+        source_run_id=model.source_run_id,
+        trained_at_utc=model.trained_at_utc,
+        algorithm=model.algorithm,
+        hyperparameters=model.hyperparameters,
+        metrics=model.metrics,
+        dataset_info=model.dataset_info,
+        notes=model.notes,
+        is_active=model.is_active,
+        content_type=model.content_type,
+        model_size_bytes=model.model_size_bytes,
+        model_sha256=model.model_sha256,
+    )
+
+
+@router.get("", response_model=ModelArtifactsPublic)
+def list_model_artifacts(
+    *,
+    session: SessionDep,
+    _current_superuser: User = Depends(get_current_active_superuser),
+    skip: int = 0,
+    limit: int = 100,
+) -> Any:
+    count_statement = select(func.count()).select_from(ModelArtifact)
+    count = int(session.exec(count_statement).one())
+
+    statement = (
+        select(ModelArtifact)
+        .offset(skip)
+        .limit(limit)
+        .order_by(ModelArtifact.created_at.desc())  # type: ignore[union-attr]
+    )
+    models = session.exec(statement).all()
+
+    return ModelArtifactsPublic(
+        data=[_to_model_artifact_public(model) for model in models],
+        count=count,
+    )
+
+
+@router.get("/active", response_model=ActiveModelPublicResponse)
+def get_active_model_artifact(
+    *,
+    session: SessionDep,
+    _current_superuser: User = Depends(get_current_active_superuser),
+) -> Any:
+    statement = select(ModelArtifact).where(ModelArtifact.is_active == True)  # noqa: E712
+    model = session.exec(statement).first()
+    if model is None:
+        return ActiveModelPublicResponse(data=None)
+    return ActiveModelPublicResponse(data=_to_model_artifact_public(model))
+
+
+@router.get("/{model_id}", response_model=ModelArtifactPublic)
+def get_model_artifact(
+    *,
+    session: SessionDep,
+    model_id: uuid.UUID,
+    _current_superuser: User = Depends(get_current_active_superuser),
+) -> Any:
+    model = session.get(ModelArtifact, model_id)
+    if model is None:
+        raise HTTPException(status_code=404, detail="Model artifact not found.")
+    return _to_model_artifact_public(model)
+
+
+@router.post("/{model_id}/activate", response_model=ModelArtifactPublic)
+def activate_model_artifact(
+    *,
+    session: SessionDep,
+    model_id: uuid.UUID,
+    _current_superuser: User = Depends(get_current_active_superuser),
+) -> Any:
+    model = session.get(ModelArtifact, model_id)
+    if model is None:
+        raise HTTPException(status_code=404, detail="Model artifact not found.")
+
+    session.exec(update(ModelArtifact).values(is_active=False))
+    model.is_active = True
+    session.add(model)
+    session.commit()
+    session.refresh(model)
+
+    return _to_model_artifact_public(model)
 
 
 @router.post("/upload", response_model=ModelArtifactUploadResponse)
@@ -75,12 +170,15 @@ def upload_model_artifact(
         metrics=metadata.metrics,
         dataset_info=metadata.dataset_info,
         notes=metadata.notes,
+        is_active=True,
         content_type=model_file.content_type,
         model_size_bytes=model_size_bytes,
         model_sha256=model_sha256,
         model_blob=model_bytes,
     )
 
+    # Auto-promote uploaded artifacts to active for dashboard-first workflows.
+    session.exec(update(ModelArtifact).values(is_active=False))
     session.add(db_model_artifact)
     session.commit()
     session.refresh(db_model_artifact)
@@ -91,6 +189,7 @@ def upload_model_artifact(
         client_version_id=db_model_artifact.client_version_id,
         source_run_id=db_model_artifact.source_run_id,
         algorithm=db_model_artifact.algorithm,
+        is_active=db_model_artifact.is_active,
         model_size_bytes=db_model_artifact.model_size_bytes,
         model_sha256=db_model_artifact.model_sha256,
         content_type=db_model_artifact.content_type,

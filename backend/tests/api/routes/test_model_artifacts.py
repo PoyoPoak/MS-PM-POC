@@ -69,9 +69,150 @@ def test_upload_model_artifact(
     assert content["algorithm"] == "RandomForestClassifier"
     assert content["client_version_id"] == metadata["client_version_id"]
     assert content["source_run_id"] == metadata["source_run_id"]
+    assert content["is_active"] is True
     assert content["model_size_bytes"] == len(model_bytes)
     assert content["model_sha256"] == hashlib.sha256(model_bytes).hexdigest()
     assert _count_model_artifacts(db) == 1
+
+
+def test_upload_auto_activates_latest_and_deactivates_previous(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    db.exec(delete(ModelArtifact))
+    db.commit()
+
+    metadata = _base_metadata()
+    first = client.post(
+        f"{settings.API_V1_STR}/models/upload",
+        headers=superuser_token_headers,
+        data={"metadata_json": json.dumps(metadata)},
+        files={
+            "model_file": ("first.joblib", b"first-model", "application/octet-stream")
+        },
+    )
+    assert first.status_code == 200
+    first_id = first.json()["id"]
+
+    metadata["client_version_id"] = "20260302_120000"
+    second = client.post(
+        f"{settings.API_V1_STR}/models/upload",
+        headers=superuser_token_headers,
+        data={"metadata_json": json.dumps(metadata)},
+        files={
+            "model_file": ("second.joblib", b"second-model", "application/octet-stream")
+        },
+    )
+    assert second.status_code == 200
+    second_id = second.json()["id"]
+
+    first_model = db.get(ModelArtifact, first_id)
+    second_model = db.get(ModelArtifact, second_id)
+
+    assert first_model is not None
+    assert second_model is not None
+    assert first_model.is_active is False
+    assert second_model.is_active is True
+
+
+def test_list_models_returns_paginated_models(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/models",
+        headers=superuser_token_headers,
+        params={"skip": 0, "limit": 10},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "data" in payload
+    assert "count" in payload
+
+
+def test_get_active_model_returns_null_when_missing(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    db.exec(delete(ModelArtifact))
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/models/active",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"data": None}
+
+
+def test_activate_model_switches_active_selection(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    db.exec(delete(ModelArtifact))
+    db.commit()
+
+    metadata = _base_metadata()
+    first = client.post(
+        f"{settings.API_V1_STR}/models/upload",
+        headers=superuser_token_headers,
+        data={"metadata_json": json.dumps(metadata)},
+        files={
+            "model_file": ("first.joblib", b"first-model", "application/octet-stream")
+        },
+    )
+    assert first.status_code == 200
+
+    metadata["client_version_id"] = "20260303_120000"
+    second = client.post(
+        f"{settings.API_V1_STR}/models/upload",
+        headers=superuser_token_headers,
+        data={"metadata_json": json.dumps(metadata)},
+        files={
+            "model_file": ("second.joblib", b"second-model", "application/octet-stream")
+        },
+    )
+    assert second.status_code == 200
+
+    first_id = first.json()["id"]
+    second_id = second.json()["id"]
+
+    activate = client.post(
+        f"{settings.API_V1_STR}/models/{first_id}/activate",
+        headers=superuser_token_headers,
+    )
+    assert activate.status_code == 200
+    assert activate.json()["id"] == first_id
+    assert activate.json()["is_active"] is True
+
+    first_model = db.get(ModelArtifact, first_id)
+    second_model = db.get(ModelArtifact, second_id)
+    assert first_model is not None
+    assert second_model is not None
+    assert first_model.is_active is True
+    assert second_model.is_active is False
+
+
+def test_model_routes_require_superuser(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+) -> None:
+    list_response = client.get(
+        f"{settings.API_V1_STR}/models",
+        headers=normal_user_token_headers,
+    )
+    active_response = client.get(
+        f"{settings.API_V1_STR}/models/active",
+        headers=normal_user_token_headers,
+    )
+
+    assert list_response.status_code == 403
+    assert active_response.status_code == 403
 
 
 def test_upload_model_artifact_not_enough_permissions(
