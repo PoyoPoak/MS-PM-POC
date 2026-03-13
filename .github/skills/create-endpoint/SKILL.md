@@ -122,7 +122,7 @@ Apply the documentation-governance rules:
 - Update docs/pacemaker-telemetry.md for telemetry schema/contract changes.
 - Update docs/training-sync-endpoints.md for training endpoint contract changes.
 - Update docs/model-upload-endpoint.md for artifact upload contract changes.
-- Use docs/template/development.md and docs/template/deployment.md as inherited template baseline references when relevant; do not duplicate long template prose into skill files.
+- Use docs/development.md and docs/deployment.md as baseline operational references when relevant; do not duplicate long prose into skill files.
 
 If no doc update is needed, explicitly state why.
 

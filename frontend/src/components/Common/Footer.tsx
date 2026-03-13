@@ -1,15 +1,29 @@
 import { Github } from "lucide-react"
+import { useEffect, useState } from "react"
 
-export function Footer() {
+import { getLatestCommitHash } from "@/lib/github"
+
+interface FooterProps {
+  commitHash?: string
+}
+
+export function Footer({ commitHash: initialHash }: FooterProps) {
+  const [commitHash, setCommitHash] = useState(initialHash || "------")
   const currentYear = new Date().getFullYear()
   const repositoryUrl =
     import.meta.env.VITE_REPOSITORY_URL ??
     "https://github.com/PoyoPoak/MS-PM-POC"
-  const rawCommitHash =
-    import.meta.env.VITE_GIT_SHA ??
-    import.meta.env.VITE_COMMIT_HASH ??
-    "local-dev"
-  const commitHash = rawCommitHash.slice(0, 7)
+
+  useEffect(() => {
+    async function fetchHash() {
+      const hash = await getLatestCommitHash()
+      if (hash) {
+        setCommitHash(hash)
+      }
+    }
+
+    void fetchHash()
+  }, [])
 
   return (
     <footer className="border-t border-zinc-300/90 bg-zinc-100/95 px-6 py-4 dark:border-zinc-700/80 dark:bg-zinc-900/95">

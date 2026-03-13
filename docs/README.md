@@ -21,12 +21,3 @@ This index maps each document to its role so contributors and coding agents can 
 ## Agent and Documentation Governance
 
 - [agent-documentation-system.md](agent-documentation-system.md): Canonical map for instructions, skills, docs, memory, and CI checks.
-
-## Template Reference Archive
-
-These files are retained as upstream template references and are not the primary source for this project's runtime behavior.
-
-- [template/README.md](template/README.md)
-- [template/development.md](template/development.md)
-- [template/deployment.md](template/deployment.md)
-- [template/release-notes.md](template/release-notes.md)

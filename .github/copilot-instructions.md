@@ -4,7 +4,7 @@ Trust these instructions first. Only search the codebase if information here is 
 
 ## Repository Overview
 
-**Pacemaker Telemetry Risk Monitoring Platform** — an interview-showcase MLOps web application built on the FastAPI Full Stack Template. The project demonstrates end-to-end software engineering: synthetic pacemaker telemetry generation, ML training/evaluation (Random Forest), model registry, risk predictions, email alerting, and a React dashboard — all orchestrated with CI/CD. **This is not a template — it is a real application.** Make changes as application features, not template improvements. See `docs/project.md` for the full specification and `docs/pacemaker-telemetry.md` for telemetry feature definitions.
+**Pacemaker Telemetry Risk Monitoring Platform** — an interview-showcase MLOps web application built on FastAPI, Postgres, and React. The project demonstrates end-to-end software engineering: synthetic pacemaker telemetry generation, ML training/evaluation (Random Forest), model registry, risk predictions, email alerting, and a React dashboard — all orchestrated with CI/CD. **This is not a template — it is a real application.** Make changes as application features, not template improvements. See `docs/project.md` for the full specification and `docs/pacemaker-telemetry.md` for telemetry feature definitions.
 
 - **Backend**: Python 3.10+ · FastAPI · SQLModel ORM · PostgreSQL · Alembic migrations · JWT auth
 - **Frontend**: React 19 · TypeScript · Vite · Tailwind CSS 4 · shadcn/ui · TanStack Router/Query
@@ -14,15 +14,17 @@ Trust these instructions first. Only search the codebase if information here is 
 - **Linting**: Ruff + mypy (backend) · Biome (frontend) · prek pre-commit hooks
 - **Testing**: pytest (backend, ≥90% coverage required) · Playwright (frontend E2E)
 
-## Template Baseline Docs
+## Baseline Docs
 
-This repository was originally bootstrapped from the FastAPI full-stack template. When checking inherited behavior, use these baseline docs:
+This repository was originally bootstrapped from the FastAPI full-stack repository, but original reference docs are no longer maintained in-repo.
 
-- `docs/template/development.md`
-- `docs/template/deployment.md`
-- `docs/template/README.md`
+Use these project docs as the source of truth:
 
-Project-specific behavior in `docs/` and this file takes precedence over template docs when they differ.
+- `docs/project.md`
+- `docs/development.md`
+- `docs/deployment.md`
+
+Project-specific behavior in `docs/` and this file is authoritative.
 
 ## Project Layout
 

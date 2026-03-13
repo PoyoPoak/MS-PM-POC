@@ -6,7 +6,72 @@ This document explains the full ingestion path in this repository:
 2. your local machine replays that data as if 1000 pacemakers are reporting,
 3. the backend validates and stores those records in PostgreSQL.
 
-It complements setup-oriented steps in [telemetry-live-replay-setup.md](telemetry-live-replay-setup.md).
+It now includes both setup and runtime flow in one place.
+
+## Quick start (local)
+
+Use this sequence to get replay running from a fresh local environment.
+
+### Prerequisites
+
+- Docker services are available.
+- Dependencies are installed from repository root:
+
+```bash
+uv sync --all-packages
+bun install
+```
+
+### 1) Start local services
+
+```bash
+docker compose up -d db mailcatcher backend frontend
+```
+
+### 2) Initialize backend data (required when preseeding is off)
+
+```bash
+docker compose exec backend bash -lc "python app/backend_pre_start.py && alembic upgrade head && python app/initial_data.py"
+```
+
+This runs DB readiness checks, migrations, and creates the first superuser.
+
+### 3) Get an access token
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/login/access-token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin@example.com&password=changethis"
+```
+
+Copy the `access_token` value from the JSON response.
+
+### 4) Optional dry run
+
+```bash
+uv run python backend/util/replay_telemetry.py --dry-run --interval-ms 0 --verbose
+```
+
+Dry run validates CSV loading and batching without POSTing to the backend.
+
+### 5) Run replay
+
+Git Bash:
+
+```bash
+export TELEMETRY_INGEST_TOKEN="<access_token>"
+uv run python backend/util/replay_telemetry.py \
+  --endpoint-url http://localhost:8000/api/v1/telemetry/ingest \
+  --interval-ms 1000 \
+  --verbose
+```
+
+PowerShell:
+
+```powershell
+$env:TELEMETRY_INGEST_TOKEN="<access_token>"
+uv run python backend\util\replay_telemetry.py --endpoint-url http://localhost:8000/api/v1/telemetry/ingest --interval-ms 1000 --verbose
+```
 
 ## 1) Architecture at a glance
 
@@ -144,8 +209,6 @@ Result: valid, non-duplicate rows are durably stored in PostgreSQL and become av
 4. Acquire superuser token.
 5. Run replay script (optionally `--dry-run` first).
 6. Verify ingest response counts and backend logs.
-
-For command-by-command setup, use [telemetry-live-replay-setup.md](telemetry-live-replay-setup.md).
 
 ## 7) Troubleshooting quick checks
 

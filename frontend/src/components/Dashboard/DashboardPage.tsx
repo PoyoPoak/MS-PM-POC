@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Activity, BellRing, Clock4, UsersRound } from "lucide-react"
-import { useMemo, useState } from "react"
+import { Activity, Clock4, Database, UsersRound } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 
 import {
   DashboardService,
@@ -162,7 +162,7 @@ function toPatientRows(
 function buildStats(
   totalPatients: number,
   highRiskCount: number,
-  alertsCount: number,
+  totalTelemetryDatapoints: number,
   lastUpdate: string | null,
 ): QuickStat[] {
   const lastUpdateValue = lastUpdate
@@ -186,10 +186,10 @@ function buildStats(
       icon: Activity,
     },
     {
-      title: "Alerts Sent",
-      value: alertsCount.toString(),
-      helper: "Notification activity",
-      icon: BellRing,
+      title: "Total Telemetry Datapoints",
+      value: totalTelemetryDatapoints.toLocaleString(),
+      helper: "Rows currently loaded in dashboard",
+      icon: Database,
     },
     {
       title: "Last Update",
@@ -202,6 +202,9 @@ function buildStats(
 
 export function DashboardPage() {
   const [inferenceRecommended, setInferenceRecommended] = useState(false)
+  const [frozenTelemetryDatapoints, setFrozenTelemetryDatapoints] = useState<
+    number | null
+  >(null)
   const queryClient = useQueryClient()
   const { showSuccessToast, showErrorToast } = useCustomToast()
 
@@ -301,6 +304,17 @@ export function DashboardPage() {
   )
 
   const summary = summaryQuery.data
+  const liveTelemetryDatapoints = patientsQuery.data?.count ?? patients.length
+
+  useEffect(() => {
+    if (frozenTelemetryDatapoints === null && patientsQuery.isSuccess) {
+      setFrozenTelemetryDatapoints(liveTelemetryDatapoints)
+    }
+  }, [
+    frozenTelemetryDatapoints,
+    liveTelemetryDatapoints,
+    patientsQuery.isSuccess,
+  ])
 
   const quickStats = useMemo(
     () =>
@@ -308,14 +322,15 @@ export function DashboardPage() {
         summary?.total_patients ?? patients.length,
         summary?.high_risk_patients ??
           patients.filter((row) => (row.riskScore ?? 0) >= 0.7).length,
-        summary?.alerts_sent ?? patients.filter((row) => row.alertsSent).length,
+        frozenTelemetryDatapoints ?? liveTelemetryDatapoints,
         summary?.last_update ?? null,
       ),
     [
-      summary?.alerts_sent,
+      frozenTelemetryDatapoints,
       summary?.high_risk_patients,
       summary?.last_update,
       summary?.total_patients,
+      liveTelemetryDatapoints,
       patients,
     ],
   )
