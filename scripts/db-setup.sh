@@ -51,6 +51,6 @@ if [[ ! -f "$REPO_ROOT/.env" ]]; then
 fi
 
 cd "$REPO_ROOT"
-docker compose up -d db
+docker compose up -d --wait db
 
-echo "Postgres container is starting."
+echo "Postgres container is ready."
