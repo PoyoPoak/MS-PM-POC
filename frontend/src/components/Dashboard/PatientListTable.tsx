@@ -384,7 +384,7 @@ export function PatientListTable({
     getPaginationRowModel: getPaginationRowModel(),
     initialState: {
       pagination: {
-        pageSize: 30,
+        pageSize: 15,
       },
     },
   })

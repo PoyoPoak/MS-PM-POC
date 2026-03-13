@@ -33,7 +33,7 @@ function Layout() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="h-svh overflow-hidden">
-        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
+        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b border-zinc-300/90 bg-zinc-100/95 px-4 shadow-sm backdrop-blur dark:border-zinc-700/80 dark:bg-zinc-900/95">
           <SidebarTrigger className="-ml-1 text-muted-foreground" />
           <div className="ml-2 flex min-w-0 items-center gap-2">
             <Activity className="size-4 text-primary" />
@@ -46,7 +46,7 @@ function Layout() {
               </p>
             </div>
           </div>
-          <div className="ml-auto hidden items-center gap-2 rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:flex">
+          <div className="ml-auto hidden items-center gap-2 rounded-full border border-zinc-300/80 bg-white/85 px-3 py-1 text-xs text-muted-foreground sm:flex dark:border-zinc-700/70 dark:bg-zinc-800/80">
             <Clock3 className="size-3.5" />
             Updated {nowLabel}
           </div>
